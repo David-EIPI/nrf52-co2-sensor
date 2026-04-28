@@ -1,12 +1,16 @@
 PROJECT_NAME     := zigbee_test
-TARGETS          := nrf52840_xxaa
+TARGETS          := nrf52840_xxaa nrf52840_xxaa_dfu
 OUTPUT_DIRECTORY := _build
+PASS_LINKER_INPUT_VIA_FILE := 0
 
 SDK_ROOT := ${HOME}/nrf
 PROJ_DIR := .
 
 $(OUTPUT_DIRECTORY)/nrf52840_xxaa.out: \
   LINKER_SCRIPT  := gcc_nrf52.ld
+
+$(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.out: \
+  LINKER_SCRIPT  := gcc_nrf52_dfu.ld
 
 # Source files common to all targets
 SRC_FILES += \
@@ -126,6 +130,7 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_twim.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uart.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uarte.c \
+  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_wdt.c \
   $(PROJ_DIR)/main.c \
   $(PROJ_DIR)/sensor.c \
   $(PROJ_DIR)/battvolt.c \
@@ -276,7 +281,7 @@ default: nrf52840_xxaa
 # Print all targets that can be built
 help:
 	@echo following targets are available:
-	@echo		nrf52840_xxaa
+	@echo		$(TARGETS)
 	@echo		
 	sdk_config - starting external tool for editing sdk_config.h
 	@echo		flash      - flashing binary
@@ -293,7 +298,7 @@ $(foreach target, $(TARGETS), $(call define_target, $(target)))
 # Flash the program
 flash: default
 	@echo Flashing: $(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex
-	nrfjprog -f nrf52 --log --verify --program $(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex --sectorerase
+	nrfjprog -f nrf52 --verify --program $(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex --sectorerase
 	nrfjprog -f nrf52 --reset
 
 erase:
@@ -303,3 +308,12 @@ SDK_CONFIG_FILE := ./sdk_config.h
 CMSIS_CONFIG_TOOL := $(SDK_ROOT)/external_tools/cmsisconfig/CMSIS_Configuration_Wizard.jar
 sdk_config:
 	java -jar $(CMSIS_CONFIG_TOOL) $(SDK_CONFIG_FILE)
+
+
+dfu-package: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex
+	@echo Packaging $<
+	adafruit-nrfutil dfu genpkg --sd-req 0xFFFE --dev-type 0x0052 --application $<  _build/dfu-package.zip
+
+bootload: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex dfu-package
+	@echo Flashing: $<
+	adafruit-nrfutil --verbose dfu serial --package _build/dfu-package.zip -p $(SERIAL_PORT) -b 115200 --singlebank --touch 1200
