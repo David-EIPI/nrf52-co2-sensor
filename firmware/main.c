@@ -4,8 +4,10 @@
 #include "zigbee_helpers.h"
 #include "zb_ha_dimmer_switch.h"
 #include "zb_transceiver.h"
+#include "zb_common.h"
 #include "nrf_delay.h"
 #include "nrf_gpio.h"
+#include "nrfx_wdt.h"
 
 #include "app_timer.h"
 
@@ -30,8 +32,9 @@ void zb_attr_update_from_scd40(sensor_output_t *data);
 void zb_attr_update_battery_voltage(int mv);
 
 ZB_ZCL_DECLARE_AIR_SENSOR_EP(m_first_endpoint, FIRST_ENDPOINT);
+ZB_ZCL_DECLARE_CONFIG_EP(m_second_endpoint, SECOND_ENDPOINT);
 
-ZBOSS_DECLARE_DEVICE_CTX_1_EP(m_sensor_device_ctx, m_first_endpoint);
+ZBOSS_DECLARE_DEVICE_CTX_2_EP(m_sensor_device_ctx, m_first_endpoint, m_second_endpoint);
 
 #define MAX_VALID_CO2 5000 /* 5000 is the max value of SCD41, but we will use it as a limit of valid data range */
 
@@ -56,6 +59,25 @@ static zb_time_t wait_interval = 0;
 
 static sensor_output_t sensor_data_unknown = SCD40_SENSOR_OUTPUT_UNKNOWN;
 static int current_battery_mV = 5000; /* Default value of USB supply */
+
+nrfx_wdt_channel_id m_channel_id;
+
+
+static void log_float_as_binary(const zb_float32_t *f)
+{
+#if (NRF_LOG_ENABLED && (NRF_LOG_LEVEL >= NRF_LOG_SEVERITY_DEBUG))
+    static char dbg_bin_f[33] = { 0 };
+
+    uint32_t p = f->v;
+    unsigned i;
+    for (i = 0; i < 32; i++, p <<= 1) {
+        dbg_bin_f[i] = p & 0x80000000 ? '1' : '0';
+    }
+    NRF_LOG_DEBUG("Bin: %s", dbg_bin_f);
+#endif
+}
+
+
 /**@brief Read sensors and update Zigbee attributes.
  *
  */
@@ -76,7 +98,7 @@ void sensor_loop_helper(uint8_t unused)
         }
     }
 
-    if (current_battery_mV > 3000) { /* 3.0V, lowest working voltage of the sensor */
+    if (current_battery_mV > 3400) { /* 3.4V, below this voltage LDO dropout becomes too large, causing sensor produce incorrect measurements */
         sensor_loop(&wait_interval, &co2_sensor_is_idle);
     } else {
         zb_attr_update_from_scd40(&sensor_data_unknown);
@@ -97,7 +119,7 @@ bool check_pending_sensor_schedule_call(void)
             return true;
         } else if (zb_err_code == RET_OVERFLOW) {
             NRF_LOG_WARNING("Can not schedule another alarm, queue is full.");
-            ZB_ERROR_CHECK(zb_err_code);
+//            ZB_ERROR_CHECK(zb_err_code);
             return false;
         } else {
             ZB_ERROR_CHECK(zb_err_code);
@@ -106,6 +128,63 @@ bool check_pending_sensor_schedule_call(void)
     }
     return true;
 }
+
+/**@brief Callback function for handling ZCL commands.
+ *
+ * @param[in]   bufid   Reference to Zigbee stack buffer used to pass received data.
+ */
+static void zcl_device_cb(zb_bufid_t bufid)
+{
+    zb_uint8_t cluster_id;
+    zb_uint8_t attr_id;
+    zb_uint8_t ep_id;
+    zb_zcl_device_callback_param_t * p_device_cb_param = ZB_BUF_GET_PARAM(bufid, zb_zcl_device_callback_param_t);
+
+    NRF_LOG_INFO("zcl_device_cb id %hd", p_device_cb_param->device_cb_id);
+
+    /* Set default response value. */
+    p_device_cb_param->status = RET_OK;
+
+    switch (p_device_cb_param->device_cb_id)
+    {
+        case ZB_ZCL_SET_ATTR_VALUE_CB_ID:
+            cluster_id = p_device_cb_param->cb_param.set_attr_value_param.cluster_id;
+            attr_id    = p_device_cb_param->cb_param.set_attr_value_param.attr_id;
+            ep_id      = p_device_cb_param->endpoint;
+
+//            NRF_LOG_INFO("endpoint %d cluster id %hd attr id %hd", ep_id, cluster_id, attr_id);
+            if (cluster_id == ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT &&
+                attr_id == ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID) {
+                zb_float32_t f_value = { .v = p_device_cb_param->cb_param.set_attr_value_param.values.data32 };
+                log_float_as_binary(&f_value);
+                int32_t i_value = float_to_int32(&f_value);
+
+                NRF_LOG_DEBUG("AO%d=%ld", ep_id, i_value);
+
+                if (i_value >= 0 && i_value < 1000000) { /* Sanity check */
+                    if (ep_id == FIRST_ENDPOINT) {
+                        sensor_set_calibration_target(i_value);
+                    }
+                    if (ep_id == SECOND_ENDPOINT) {
+                        sensor_request_calibration(i_value);
+                    }
+                }
+
+            } else {
+                p_device_cb_param->status = RET_NOT_IMPLEMENTED;
+                NRF_LOG_INFO("Unhandled cluster attribute id: %d 0x%x", cluster_id, attr_id);
+            }
+            break;
+        default:
+            p_device_cb_param->status = RET_NOT_IMPLEMENTED;
+            break;
+    }
+
+    NRF_LOG_INFO("zcl_device_cb status: %hd", p_device_cb_param->status);
+}
+
+
+
 
 /**@brief Zigbee stack event handler.
  *
@@ -118,11 +197,14 @@ void zboss_signal_handler(zb_bufid_t bufid)
 //    zb_ret_t                       status = ZB_GET_APP_SIGNAL_STATUS(bufid);
 //    zb_ret_t                       zb_err_code;
 
+    if (sig != 22)
+        NRF_LOG_INFO("zboss signal %hu", sig);
+
     switch(sig)
     {
         case 50:
             NRF_LOG_INFO("Intercepting signal 50.");
-            zb_osif_abort();
+//            zb_osif_abort();
             break;
         case ZB_BDB_SIGNAL_DEVICE_REBOOT:
             /* fall-through */
@@ -133,7 +215,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
             sensor_loop_helper(0);
             check_pending_sensor_schedule_call();
             break;
-#if 1
+
         case ZB_COMMON_SIGNAL_CAN_SLEEP:
             /* Zigbee stack can enter sleep state.
              * If the application wants to proceed, it should call zb_sleep_now() function.
@@ -141,12 +223,11 @@ void zboss_signal_handler(zb_bufid_t bufid)
              * Note: if the application shares some resources between Zigbee stack and other tasks/contexts,
              *       device disabling should be overwritten by implementing one of the weak functions inside zb_nrf52840_common.c.
              */
-            if (check_pending_sensor_schedule_call()) {
-                zb_sleep_now();
-//                ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
-            }
+            check_pending_sensor_schedule_call();
+            zb_sleep_now();
+//            ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
             break;
-#endif
+
         default:
             /* Call default signal handler. */
             ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
@@ -182,8 +263,29 @@ static void log_init(void)
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
 
+
+/**@brief Function for initializing the nrf hardware watchdog module.
+ */
+static void wdt_init(void)
+{
+    nrfx_wdt_config_t config = NRFX_WDT_DEAFULT_CONFIG;
+    uint32_t err_code = nrfx_wdt_init(&config, NULL);
+    APP_ERROR_CHECK(err_code);
+    err_code = nrfx_wdt_channel_alloc(&m_channel_id);
+    APP_ERROR_CHECK(err_code);
+    nrfx_wdt_enable();
+}
+
+
 void zb_attr_update_from_scd40(sensor_output_t *data)
 {
+/* Feed the dog every time the attributes are updated.
+   The WDT module should be configured with a reasonably large value of active CPU time
+   so that sensor and Zigbee routines can complete.
+*/
+    nrfx_wdt_channel_feed(m_channel_id);
+
+
     NRF_LOG_INFO("Updating attributes.");
     NRF_LOG_INFO("  CO2 = %u ppm", data->ppm_CO2 == SCD40_CONC_MEASUREMENT_UNKNOWN ? 0 : data->ppm_CO2 );
     NRF_LOG_INFO("  T   = %d C", data->c_temperature == ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_UNKNOWN ? 0 : data->c_temperature);
@@ -209,6 +311,8 @@ void zb_attr_update_from_scd40(sensor_output_t *data)
     if (data->ppm_CO2 != SCD40_CONC_MEASUREMENT_UNKNOWN) {
         concentration_ppm_to_float(data->ppm_CO2, &float_conversion_buf);
     }
+    NRF_LOG_DEBUG("ppm=%ld", data->ppm_CO2);
+    log_float_as_binary(&float_conversion_buf);
 
     zb_zcl_set_attr_val(FIRST_ENDPOINT,
                                      ZB_ZCL_CLUSTER_ID_CONC_MEASUREMENT_CO2,
@@ -216,6 +320,19 @@ void zb_attr_update_from_scd40(sensor_output_t *data)
                                      ZB_ZCL_ATTR_CONC_MEASUREMENT_VALUE_ID,
                                      (zb_uint8_t *)&float_conversion_buf,
                                      ZB_FALSE);
+
+
+    int32_to_float(data->t_calibration, &float_conversion_buf);
+    NRF_LOG_DEBUG("tcal=%ld", data->t_calibration);
+    log_float_as_binary(&float_conversion_buf);
+
+    zb_zcl_set_attr_val(SECOND_ENDPOINT,
+                                     ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
+                                     ZB_ZCL_CLUSTER_SERVER_ROLE,
+                                     ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID,
+                                     (zb_uint8_t *)&float_conversion_buf,
+                                     ZB_FALSE);
+
 
 
 }
@@ -234,10 +351,26 @@ void log_chip_info(void)
 {
     uint32_t part = NRF_FICR->INFO.PART;
     NRF_LOG_INFO("chip part no = 0x%x", part);
+    NRF_LOG_FLUSH();
     uint32_t var = NRF_FICR->INFO.VARIANT;
     NRF_LOG_INFO("chip variant = %c%c%c%c", var&0xff, (var>>8)&0xff, (var>>16)&0xff, (var>>24)&0xff);
+    NRF_LOG_FLUSH();
     uint32_t pack = NRF_FICR->INFO.PACKAGE;
     NRF_LOG_INFO("chip package = 0x%x", pack);
+    NRF_LOG_FLUSH();
+}
+
+void led_blink(int count)
+{
+    int i = 0;
+
+    for (i = 0; i < count; i++) {
+        nrf_gpio_pin_set(NRF_GPIO_PIN_MAP(0, 15));
+        nrf_delay_ms(250);
+        nrf_gpio_pin_clear(NRF_GPIO_PIN_MAP(0, 15));
+        nrf_delay_ms(250);
+    }
+
 }
 
 /**@brief Function for application main entry.
@@ -247,14 +380,14 @@ int main(void)
     zb_ret_t       zb_err_code;
     zb_ieee_addr_t ieee_addr;
 
-    /* Initialize timers, loging system and GPIOs. */
-//    timers_init();
+    nrf_gpio_cfg_output(NRF_GPIO_PIN_MAP(0, 15));
+
+    /* Initialize loging system and GPIOs. */
     log_init();
     log_chip_info();
 
     sensor_init (zb_attr_update_from_scd40);
 
-//    adc_init();
     calibration_test();
     zb_trans_set_tx_power(-8);
 
@@ -263,8 +396,14 @@ int main(void)
     ZB_SET_TRACE_MASK(ZIGBEE_TRACE_MASK);
     ZB_SET_TRAF_DUMP_OFF();
 
+    /* Indicate boot progress */
+    led_blink(2);
+
     /* Initialize Zigbee stack. */
     ZB_INIT("air_sensor");
+
+    /* Indicate successful initialization of Zigbee subsystem */
+    led_blink(2);
 
     /* Set device address to the value read from FICR registers. */
     zb_osif_get_ieee_eui64(ieee_addr);
@@ -277,29 +416,26 @@ int main(void)
     zb_set_keepalive_timeout(ZB_MILLISECONDS_TO_BEACON_INTERVAL(15000));
     sleepy_device_setup();
 
-    /* Initialize application context structure. */
-//    UNUSED_RETURN_VALUE(ZB_MEMSET(&m_device_ctx, 0, sizeof(light_switch_ctx_t)));
+    /* Register callback for handling ZCL commands. */
+    ZB_ZCL_REGISTER_DEVICE_CB(zcl_device_cb);
 
-    /* Set default bulb short_addr. */
-//    m_device_ctx.bulb_params.short_addr = 0xFFFF;
-
-    /* Register dimmer switch device context (endpoints). */
-//    ZB_AF_REGISTER_DEVICE_CTX(&dimmer_switch_ctx);
+    /* Register sensor device context (endpoints). */
     ZB_AF_REGISTER_DEVICE_CTX(&m_sensor_device_ctx);
-
-    /* Register handlers to identify notifications */
-//    ZB_AF_SET_IDENTIFY_NOTIFICATION_HANDLER(LIGHT_SWITCH_ENDPOINT, identify_handler);
-
 
     /** Start Zigbee Stack. */
     zb_err_code = zboss_start_no_autostart();
     ZB_ERROR_CHECK(zb_err_code);
-//    nrf_gpio_cfg_output(NRF_GPIO_PIN_MAP(0, 15));
+
+    /* Start the watchdog just before the main loop. */
+    wdt_init();
+
+    /* Indicate successful initialization of all modules */
+    led_blink(2);
+
     while(1)
     {
         zboss_main_loop_iteration();
         UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());
-//        nrf_gpio_pin_clear(NRF_GPIO_PIN_MAP(0, 15));
     }
 }
 
