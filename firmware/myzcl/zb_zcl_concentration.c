@@ -21,14 +21,17 @@ static zb_ret_t check_value_conc_measurement(zb_uint16_t attr_id, zb_uint8_t end
 {
     zb_ret_t ret = ZB_FALSE;
     zb_int32_t val = ZB_ZCL_ATTR_GET32(p_value);
+    zb_float32_t fval = { .v = val };
+    int32_t ival = concentration_float_to_ppm(&fval);
 
-    NRF_LOG_DEBUG("Pre-validating value %hi of Concentration attribute %d", val, attr_id);
+    NRF_LOG_DEBUG("Pre-validating value %d of Concentration attribute %d", ival, attr_id);
 
 /* Not implemented, always return true for valid attribute ids */
     switch(attr_id)
     {
         case ZB_ZCL_ATTR_CONC_MEASUREMENT_VALUE_ID:
-            ret = ZB_TRUE;
+
+            ret = (ival >= 0) && (ival <= 5000) ? ZB_TRUE : ZB_FALSE;
             break;
 
         case ZB_ZCL_ATTR_CONC_MEASUREMENT_MIN_VALUE_ID:

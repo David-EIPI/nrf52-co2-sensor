@@ -79,7 +79,7 @@ enum zb_zcl_conc_measurement_attr_e
 #define ZB_ZCL_ATTR_CONC_MEASUREMENT_TOLERANCE_MAX_VALUE            {0x3f800000}
 
 /**@brief Default value for Value attribute. */
-#define ZB_ZCL_CONC_MEASUREMENT_VALUE_DEFAULT_VALUE                 {0}
+#define ZB_ZCL_CONC_MEASUREMENT_VALUE_DEFAULT_VALUE                 ZB_ZCL_ATTR_CONC_MEASUREMENT_VALUE_UNKNOWN
 
 #define ZB_SET_ATTR_DESCR_WITH_ZB_ZCL_ATTR_CONC_MEASUREMENT_VALUE_ID(data_ptr) \
 {                                                                              \
