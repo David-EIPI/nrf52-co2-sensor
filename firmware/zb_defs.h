@@ -2,6 +2,7 @@
 #define _ZB_DEFS_H_
 
 #include "zb_zcl_concentration.h"
+#include "zb_zcl_analog_output.h"
 
 /* Zigbee definitions and code.
 */
@@ -14,6 +15,7 @@
 #endif
 
 #define FIRST_ENDPOINT      1
+#define SECOND_ENDPOINT     2
 
 /* Basic cluster attributes initial values. */
 #define SENSOR_INIT_BASIC_APP_VERSION        1                                    /**< Version of the application software (1 byte). */
@@ -127,6 +129,44 @@ ZB_ZCL_DECLARE_TEMP_MEASUREMENT_ATTRIB_LIST(temp_attr_list,
     &m_attr_temp_tolerance);
 
 
+static zb_float32_t m_calib_dur = ZB_ZCL_ANALOG_OUTPUT_VALUE_DEFAULT_VALUE;
+static zb_float32_t m_calib_dur_min_value = (zb_float32_t)(0.0f);
+static zb_float32_t m_calib_dur_max_value = (zb_float32_t)(10000.0f);
+static zb_float32_t m_calib_dur_resolution = (zb_float32_t)(1.0f);
+static uint16_t m_calib_dur_units = 73; /* BACnet: seconds */;
+static char calib_dur_description[] = "\x0b" "Calibration";
+static uint32_t m_calib_dur_app_type = 0x05 << 16; /* Type: Parts per million */;
+
+/* Declare attribute list for Analog Output cluster - calibration duration */
+ZB_ZCL_DECLARE_ANALOG_OUTPUT_ATTRIB_LIST_EX(calib_dur_attr_list,
+    &m_calib_dur,
+    &m_calib_dur_min_value,
+    &m_calib_dur_max_value,
+    &m_calib_dur_resolution,
+    &m_calib_dur_units,
+    &calib_dur_description,
+    &m_calib_dur_app_type);
+
+
+static zb_float32_t m_calib_conc = (zb_float32_t)(420.0f);
+static zb_float32_t m_calib_conc_min_value = (zb_float32_t)(300.0f);
+static zb_float32_t m_calib_conc_max_value = (zb_float32_t)(2000.0f);
+static zb_float32_t m_calib_conc_resolution = (zb_float32_t)(1.0f);
+static uint16_t m_calib_conc_units = 96; /* BACnet: parts per million */
+static char calib_conc_description[] = "\x0f" "CO2 target conc.";
+static uint32_t m_calib_conc_app_type = 14 << 16; /* Type: Time in seconds */;
+
+/* Declare attribute list for Analog Output cluster - target concentration */
+ZB_ZCL_DECLARE_ANALOG_OUTPUT_ATTRIB_LIST_EX(calib_conc_attr_list,
+    &m_calib_conc,
+    &m_calib_conc_min_value,
+    &m_calib_conc_max_value,
+    &m_calib_conc_resolution,
+    &m_calib_conc_units,
+    &calib_conc_description,
+    &m_calib_conc_app_type);
+
+
 zb_zcl_cluster_desc_t sensor_cluster_list[] =
 {
   ZB_ZCL_CLUSTER_DESC(
@@ -162,15 +202,39 @@ zb_zcl_cluster_desc_t sensor_cluster_list[] =
     (conc_measure_attr_list),
     ZB_ZCL_CLUSTER_SERVER_ROLE
   ),
+  ZB_ZCL_CLUSTER_DESC(
+    ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
+    ZB_ZCL_ARRAY_SIZE(calib_conc_attr_list, zb_zcl_attr_t),
+    (calib_conc_attr_list),
+    ZB_ZCL_CLUSTER_SERVER_ROLE,
+    ZB_ZCL_MANUF_CODE_INVALID
+  ),
+};
+
+
+zb_zcl_cluster_desc_t config_cluster_list[] =
+{
+  ZB_ZCL_CLUSTER_DESC(
+    ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
+    ZB_ZCL_ARRAY_SIZE(calib_dur_attr_list, zb_zcl_attr_t),
+    (calib_dur_attr_list),
+    ZB_ZCL_CLUSTER_SERVER_ROLE,
+    ZB_ZCL_MANUF_CODE_INVALID
+  ),
 };
 
 /* Cluster counts have to be plain numbers, they will be stringized later in the _DESC macros. */
 
-#define SENSOR_CLUSTER_LIST_IN_NUM    5
+#define SENSOR_CLUSTER_LIST_IN_NUM    6
 #define SENSOR_CLUSTER_LIST_OUT_NUM   0
 
-/* Reporting clusters list. Currently there are 4 reporting clusters. */
-#define ZB_SENSOR_REPORT_ATTR_COUNT   4
+#define CONFIG_CLUSTER_LIST_IN_NUM    1
+#define CONFIG_CLUSTER_LIST_OUT_NUM   0
+
+/* Reporting clusters list. Currently there are 6 reporting clusters.
+ Only one reporting context needs to be allocated between all endpoints.
+*/
+#define ZB_SENSOR_REPORT_ATTR_COUNT   6
 
 /* Declare cluster list description type. All clusters are of type in (server). */
 /* Cluster list description for the first endpoint */
@@ -191,6 +255,24 @@ zb_zcl_cluster_desc_t sensor_cluster_list[] =
         ZB_ZCL_CLUSTER_ID_ELECTRICAL_MEASUREMENT, \
         ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT, \
         ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT, \
+        ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT, \
+    }, \
+  };
+
+/* Cluster list description for the first endpoint */
+#define ZB_ZCL_DECLARE_CONFIG_SIMPLE_DESC(ep_name, ep_id, in_clust_num, out_clust_num)             \
+  ZB_DECLARE_SIMPLE_DESC_VA(in_clust_num, out_clust_num, ep_name);                          \
+  ZB_AF_SIMPLE_DESC_TYPE_VA(in_clust_num, out_clust_num, ep_name) simple_desc_##ep_name =   \
+  { \
+    SECOND_ENDPOINT, \
+    ZB_AF_HA_PROFILE_ID, \
+    ZB_HA_SIMPLE_SENSOR_DEVICE_ID, \
+    0, \
+    0, \
+    (in_clust_num + out_clust_num), \
+    0, \
+    { \
+        ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT, \
     }, \
   };
 
@@ -214,7 +296,23 @@ zb_zcl_cluster_desc_t sensor_cluster_list[] =
       ZB_ZCL_ARRAY_SIZE(sensor_cluster_list, zb_zcl_cluster_desc_t), \
       sensor_cluster_list, \
       (zb_af_simple_desc_1_1_t*)&simple_desc_##ep_name, \
-      ZB_SENSOR_REPORT_ATTR_COUNT, sensor_reporting_clusters, 0, NULL)
+      ZB_SENSOR_REPORT_ATTR_COUNT-1, sensor_reporting_clusters, 0, NULL)
+
+
+#define ZB_ZCL_DECLARE_CONFIG_EP(ep_name, ep_id)        \
+    ZB_ZCL_DECLARE_CONFIG_SIMPLE_DESC(ep_name, \
+        ep_id, \
+        CONFIG_CLUSTER_LIST_IN_NUM, \
+        CONFIG_CLUSTER_LIST_OUT_NUM); \
+    ZB_AF_DECLARE_ENDPOINT_DESC(ep_name, ep_id, \
+      ZB_AF_HA_PROFILE_ID, \
+      0, \
+      NULL, \
+      ZB_ZCL_ARRAY_SIZE(config_cluster_list, zb_zcl_cluster_desc_t), \
+      config_cluster_list, \
+      (zb_af_simple_desc_1_1_t*)&simple_desc_##ep_name, \
+      1, sensor_reporting_clusters+5,            \
+      0, NULL)
 
 
 #define SCD40_CONC_MEASUREMENT_UNKNOWN ((uint32_t)-1)
