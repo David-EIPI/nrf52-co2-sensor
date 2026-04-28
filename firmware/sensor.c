@@ -16,10 +16,12 @@
 #define SENSOR_INTERVAL 300000  /* interval between measurement series; ms */
 #define DATA_INTERVAL 5000  /* interval between periodic measurements: 5000 for normal, 30000 for low power; ms */
 #define STATUS_INTERVAL (DATA_INTERVAL/2+100)  /* interval between data status checks; ms */
-#define NUM_PRE_READINGS   3 /* Number of warmup readings, which are discarded  */
-#define NUM_READINGS   1 /* Number of readings to collect for averaging */
+#define CALIBRATION_INTERVAL ((DATA_INTERVAL/1000)*1000) /* intervals between calibration steps should be multiples of 1000ms for accurate reporting of calibration progress */
 
-#define TEMPERATURE_CORRECTION 120 /* Additional offset of the temperature sensor, x100 C */
+#define NUM_DISCARD   0 /* Number of warmup readings, which are discarded  */
+#define NUM_AVERAGE   1 /* Number of readings to collect for averaging */
+
+#define TEMPERATURE_CORRECTION 0 /* Additional offset of the temperature sensor, x100 C */
 
 /* I2C definitions and code.
    I2C is called TWI in Nordic's terminology.
@@ -39,6 +41,8 @@
 #define SCD40_READ_MEASUREMENT               {0xec, 0x05}
 #define SCD40_STOP_PERIODIC_MEASUREMENT      {0x3f, 0x86}
 #define SCD40_GET_DATA_READY_STATUS          {0xe4, 0xb8}
+#define SCD40_DISABLE_AUTO_CALIBRATION       {0x24, 0x16}
+#define SCD40_FORCED_RECALIBRATION           {0x36, 0x2f}
 
 
 /* TWI instance ID. */
@@ -53,11 +57,18 @@ static volatile bool m_xfer_done = false;
 static volatile bool m_xfer_success = false;
 static volatile int m_xfer_evt_code = NRFX_TWI_EVT_DONE;
 
+/* Calibration status */
+static volatile uint32_t calibration_request = 0;
+static volatile uint32_t calibration_progress = 0;
+static volatile uint16_t calibration_target = 420;
+
 /* TWI instance. */
 static const nrfx_twi_t m_twi = NRFX_TWI_INSTANCE(TWI_INSTANCE_ID);
 
 /* Buffer for samples read from CO2 sensor. */
 static uint8_t m_ready[3];
+
+static uint8_t m_cal_offset[3];
 
 /* Forward declaration for the scheduler */
 void sensor_loop_helper(zb_uint8_t position);
@@ -90,6 +101,17 @@ static uint8_t scd40_read_data_cmd[]         = SCD40_READ_MEASUREMENT;
 static uint8_t scd40_stop_measurement_cmd[]  = SCD40_STOP_PERIODIC_MEASUREMENT;
 static uint8_t scd40_data_ready_cmd[]        = SCD40_GET_DATA_READY_STATUS;
 
+static uint8_t scd40_disable_auto_cal_cmd[]  = SCD40_DISABLE_AUTO_CALIBRATION;
+
+static struct {
+    uint8_t cmd[2];
+    uint8_t ppm[2];
+    uint8_t crc8;
+} scd40_forced_cal_cmd = {
+    .cmd = SCD40_FORCED_RECALIBRATION
+};
+
+
 
 nrfx_twi_xfer_desc_t scd40_start_measurement_desc =
     NRFX_TWI_XFER_DESC_TX(SCD40_ADDR, scd40_start_measurement_cmd, sizeof(scd40_start_measurement_cmd));
@@ -103,9 +125,25 @@ nrfx_twi_xfer_desc_t scd40_stop_measurement_desc =
 nrfx_twi_xfer_desc_t scd40_data_ready_desc =
     NRFX_TWI_XFER_DESC_TXRX(SCD40_ADDR, scd40_data_ready_cmd, sizeof(scd40_data_ready_cmd), m_ready, sizeof(m_ready));
 
+
+nrfx_twi_xfer_desc_t scd40_disable_auto_cal_desc =
+    NRFX_TWI_XFER_DESC_TX(SCD40_ADDR, scd40_disable_auto_cal_cmd, sizeof(scd40_disable_auto_cal_cmd));
+
+
+nrfx_twi_xfer_desc_t scd40_forced_cal_desc =
+    NRFX_TWI_XFER_DESC_TX(SCD40_ADDR, (uint8_t*)&scd40_forced_cal_cmd, sizeof(scd40_forced_cal_cmd));
+
+nrfx_twi_xfer_desc_t scd40_cal_offset_desc =
+    NRFX_TWI_XFER_DESC_RX(SCD40_ADDR, m_cal_offset, sizeof(m_cal_offset));
+
+
+
 static uint8_t test_xfer_data[] = { 0xff, 0xff };
 nrfx_twi_xfer_desc_t test_transfer_desc =
     NRFX_TWI_XFER_DESC_TX(SCD40_ADDR+2, test_xfer_data, sizeof(test_xfer_data));
+
+
+
 
 /* Possible loop action outcomes */
 typedef enum sensor_loop_action_result {
@@ -260,7 +298,6 @@ sensor_loop_action_result_t scd40_read_data(int count)
 
     NRF_LOG_INFO("read %u %u %u", ppm_CO2, (175*c_temp)>>16, (100*c_hum)>>16);
 
-//    if (scd40_measurement_data.count < NUM_READINGS)
     if (scd40_measurement_data.count < count)
         return SLA_RETRY;
 
@@ -269,12 +306,12 @@ sensor_loop_action_result_t scd40_read_data(int count)
 
 sensor_loop_action_result_t scd40_read_data1(void)
 {
-    return scd40_read_data(NUM_PRE_READINGS);
+    return scd40_read_data(NUM_DISCARD);
 }
 
 sensor_loop_action_result_t scd40_read_dataN(void)
 {
-    return scd40_read_data(NUM_READINGS);
+    return scd40_read_data(NUM_AVERAGE);
 }
 
 /**
@@ -282,9 +319,6 @@ sensor_loop_action_result_t scd40_read_dataN(void)
  */
 sensor_loop_action_result_t scd40_stop_measurement(void)
 {
-//    while (nrfx_twi_is_busy(&m_twi))
-//        nrf_delay_ms(1);
-
     ret_code_t err_code;
 
     err_code = nrfx_twi_xfer(&m_twi, &scd40_stop_measurement_desc, 0);
@@ -344,6 +378,65 @@ sensor_loop_action_result_t scd40_update_zb_data(void)
 
     return SLA_SUCCESS;
 }
+
+
+/**
+ * @brief Command to disable auto-calibration.
+ * This sensor normally should not be able to reach conditions
+ * needed by auto-calibration, but it is safer to disable it
+ * and rely only on forced calibration on request.
+ */
+sensor_loop_action_result_t scd40_disable_auto_calibration(void)
+{
+    nrfx_twi_xfer(&m_twi, &scd40_disable_auto_cal_desc, 0);
+    return SLA_SUCCESS;
+}
+
+sensor_loop_action_result_t scd40_forced_calibration(void)
+{
+    if (0 == calibration_request)
+        return SLA_SUCCESS;
+
+    scd40_reset_data();
+
+    sensor_loop_action_result_t rslt = scd40_read_data(1);
+
+    calibration_progress += CALIBRATION_INTERVAL / 1000;
+
+    if (SLA_SUCCESS == rslt) {
+
+        if (calibration_progress >= calibration_request) {
+            scd40_stop_measurement();
+            nrf_delay_ms(500);
+            uint16_big_encode(calibration_target, scd40_forced_cal_cmd.ppm);
+            scd40_forced_cal_cmd.crc8 = sensirion_common_generate_crc(scd40_forced_cal_cmd.ppm, 2);
+
+            nrfx_twi_xfer(&m_twi, &scd40_forced_cal_desc, 0);
+            nrf_delay_ms(600);
+
+            nrfx_twi_xfer(&m_twi, &scd40_cal_offset_desc, 0);
+            nrf_delay_ms(100);
+            int32_t offset = uint16_big_decode(m_cal_offset);
+            if (offset > 0)
+                offset = (0x8000 - offset);
+            NRF_LOG_INFO("calibration offset = %d", offset );
+
+            calibration_progress = calibration_request = 0;
+            scd40_start_measurement();
+        } else {
+            rslt = SLA_RETRY;
+        }
+
+        scd40_measurement_data.out.t_calibration = calibration_request - calibration_progress;
+        NRF_LOG_INFO("calibration %lu / %lu", calibration_progress, calibration_request);
+        scd40_update_zb_data();
+    }
+
+
+    return rslt;
+}
+
+
 
 /**
  * @brief TWI events handler.
@@ -408,8 +501,13 @@ typedef sensor_loop_action_result_t (*sensor_loop_function_t)(void);
 static uint8_t loop_position = 0;
 /* Number of retries after action call has returned false */
 static uint8_t loop_fail_count = 0;
-/* Maximum number of retries before resetting */
-static const uint8_t max_fail_count = 20;
+
+/* Maximum number of retries before resetting. This should be large enough 
+ * to allow for necessary number of attempts between sensor data ready events.
+ * Absence of data is counted towards failed attempts, because very long wait
+ * periods usually mean sensor is in error state and needs to be reset.
+ */
+static const uint8_t max_fail_count = 10 * (DATA_INTERVAL / STATUS_INTERVAL);
 
 #define USE_STOP 1
 
@@ -418,7 +516,7 @@ struct {
     sensor_loop_function_t action;
 } sensor_loop_tbl[] = {
     {
-        0,
+        ZB_MILLISECONDS_TO_BEACON_INTERVAL(1),
         scd40_stop_measurement,
     },
 #if USE_STOP
@@ -432,28 +530,33 @@ struct {
     },
 #endif
     {
-        ZB_MILLISECONDS_TO_BEACON_INTERVAL(1000), /* Sensor needs 1000ms to enter the idle state */
+        ZB_MILLISECONDS_TO_BEACON_INTERVAL(2000), /* Datasheet specifies that sensor will be ready 1000ms after power up */
+        scd40_disable_auto_calibration,
+    },
+
+    {
+        ZB_MILLISECONDS_TO_BEACON_INTERVAL(1),
         scd40_start_measurement,
     },
+
     {
         ZB_MILLISECONDS_TO_BEACON_INTERVAL(DATA_INTERVAL),
         scd40_reset_data,
     },
 
-#if 1
-/* Read and accumulate several measurements */
+    {   ZB_MILLISECONDS_TO_BEACON_INTERVAL(CALIBRATION_INTERVAL),
+        scd40_forced_calibration,
+    },
+#if (defined(NUM_DISCARD) && (NUM_DISCARD > 0))
+/* Read and discard first few measurements  */
     {
         ZB_MILLISECONDS_TO_BEACON_INTERVAL(STATUS_INTERVAL),
         scd40_read_data1,
     },
 
-    {
-        0,
-        scd40_stop_measurement,
-    },
 
     {
-        ZB_MILLISECONDS_TO_BEACON_INTERVAL(15000),
+        ZB_MILLISECONDS_TO_BEACON_INTERVAL(DATA_INTERVAL),
         scd40_reset_data,
     },
 
@@ -464,9 +567,13 @@ struct {
         scd40_read_dataN,
     },
 
+    {
+        ZB_MILLISECONDS_TO_BEACON_INTERVAL(1),
+        scd40_stop_measurement,
+    },
 
     {
-        0,
+        ZB_MILLISECONDS_TO_BEACON_INTERVAL(1),
         scd40_update_zb_data,
     },
 };
@@ -540,6 +647,8 @@ void sensor_loop(zb_time_t *wait_interval, uint8_t *is_idle)
             loop_position = 0;
             loop_fail_count = 0;
         }
+    } else if (SLA_RETRY == result) {
+        loop_fail_count = 0;
     }
 
     if (loop_position >= ARRAY_SIZE(sensor_loop_tbl)) {
@@ -553,6 +662,42 @@ void sensor_loop(zb_time_t *wait_interval, uint8_t *is_idle)
 /* Schedule next step */
 //    ZB_ERROR_CHECK(ZB_SCHEDULE_APP_ALARM(sensor_loop_helper, loop_position, interval));
 
-
 }
 
+void sensor_set_calibration_target(uint32_t target)
+{
+    if (target > 2000)
+        target = 2000;
+    if (target < 300)
+        target = 300;
+    calibration_target = target;
+}
+
+void sensor_request_calibration(uint32_t calib_time)
+{
+/* Another calibration process has not finished yet */
+    if (calibration_progress > 0)
+        return;
+
+    calibration_request = calib_time;
+}
+
+#define CRC8_POLYNOMIAL 0x31
+#define CRC8_INIT 0xFF
+uint8_t sensirion_common_generate_crc(const uint8_t* data, uint16_t count)
+{
+    uint16_t current_byte;
+    uint8_t crc = CRC8_INIT;
+    uint8_t crc_bit;
+/* calculates 8-Bit checksum with given polynomial */
+    for (current_byte = 0; current_byte < count; ++current_byte) {
+        crc ^= (data[current_byte]);
+        for (crc_bit = 8; crc_bit > 0; --crc_bit) {
+            if (crc & 0x80)
+                crc = (crc << 1) ^ CRC8_POLYNOMIAL;
+            else
+                crc = (crc << 1);
+        }
+    }
+    return crc;
+}
