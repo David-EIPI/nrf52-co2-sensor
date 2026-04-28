@@ -38,6 +38,8 @@ enum zb_zcl_analog_output_attr_e
     ZB_ZCL_ATTR_ANALOG_OUTPUT_RESOLUTION_ID = 0x006A,
     /*@brief Units, ZCL spec 3.14.11.10 */
     ZB_ZCL_ATTR_ANALOG_OUTPUT_ENGINEERING_UNITS_ID = 0x0075,
+    /*@brief Application type, ZCL spec 3.14.11.19 */
+    ZB_ZCL_ATTR_ANALOG_OUTPUT_APPLICATION_TYPE_ID = 0x100,
 };
 
 /**@brief Analog Output cluster ID. */
@@ -75,25 +77,25 @@ enum zb_zcl_analog_output_attr_e
 /**@brief Default value for Value attribute. */
 #define ZB_ZCL_ANALOG_OUTPUT_VALUE_DEFAULT_VALUE                 {0}
 
-#define ZB_SET_ATTR_DESCR_WITH_ZB_ZCL_ATTR_ANALOG_OUTPUT_VALUE_ID(data_ptr)    \
+#define ZB_SET_ATTR_DESCR_WITH_ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID(data_ptr)    \
 {                                                                              \
-    ZB_ZCL_ATTR_ANALOG_OUTPUT_VALUE_ID,                                        \
+    ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID,                                \
     ZB_ZCL_ATTR_TYPE_SINGLE,                                                   \
-    ZB_ZCL_ATTR_ACCESS_REPORTING,                                              \
+    ZB_ZCL_ATTR_ACCESS_READ_WRITE | ZB_ZCL_ATTR_ACCESS_REPORTING,              \
     (void*) data_ptr                                                           \
 }
 
-#define ZB_SET_ATTR_DESCR_WITH_ZB_ZCL_ATTR_ANALOG_OUTPUT_MIN_VALUE_ID(data_ptr) \
+#define ZB_SET_ATTR_DESCR_WITH_ZB_ZCL_ATTR_ANALOG_OUTPUT_MIN_PRESENT_VALUE_ID(data_ptr) \
 {                                                                               \
-    ZB_ZCL_ATTR_ANALOG_OUTPUT_MIN_VALUE_ID,                                     \
+    ZB_ZCL_ATTR_ANALOG_OUTPUT_MIN_PRESENT_VALUE_ID,                             \
     ZB_ZCL_ATTR_TYPE_SINGLE,                                                    \
     ZB_ZCL_ATTR_ACCESS_READ_ONLY,                                               \
     (void*) data_ptr                                                            \
 }
 
-#define ZB_SET_ATTR_DESCR_WITH_ZB_ZCL_ATTR_ANALOG_OUTPUT_MAX_VALUE_ID(data_ptr) \
+#define ZB_SET_ATTR_DESCR_WITH_ZB_ZCL_ATTR_ANALOG_OUTPUT_MAX_PRESENT_VALUE_ID(data_ptr) \
 {                                                                               \
-    ZB_ZCL_ATTR_ANALOG_OUTPUT_MAX_VALUE_ID,                                     \
+    ZB_ZCL_ATTR_ANALOG_OUTPUT_MAX_PRESENT_VALUE_ID,                             \
     ZB_ZCL_ATTR_TYPE_SINGLE,                                                    \
     ZB_ZCL_ATTR_ACCESS_READ_ONLY,                                               \
     (void*) data_ptr                                                            \
@@ -103,7 +105,7 @@ enum zb_zcl_analog_output_attr_e
 {                                                                                 \
     ZB_ZCL_ATTR_ANALOG_OUTPUT_RESOLUTION_ID,                                      \
     ZB_ZCL_ATTR_TYPE_SINGLE,                                                      \
-    ZB_ZCL_ATTR_ACCESS_READ_ONLY | ZB_ZCL_ATTR_ACCESS_REPORTING,                  \
+    ZB_ZCL_ATTR_ACCESS_READ_ONLY,                                                 \
     (void*) data_ptr                                                              \
 }
 
@@ -111,7 +113,7 @@ enum zb_zcl_analog_output_attr_e
 {                                                                                 \
     ZB_ZCL_ATTR_ANALOG_OUTPUT_ENGINEERING_UNITS_ID,                               \
     ZB_ZCL_ATTR_TYPE_U16,                                                         \
-    ZB_ZCL_ATTR_ACCESS_READ_ONLY | ZB_ZCL_ATTR_ACCESS_REPORTING,                  \
+    ZB_ZCL_ATTR_ACCESS_READ_ONLY,                                                 \
     (void*) data_ptr                                                              \
 }
 
@@ -119,10 +121,17 @@ enum zb_zcl_analog_output_attr_e
 {                                                                                 \
     ZB_ZCL_ATTR_ANALOG_OUTPUT_DESCRIPTION_ID,                                     \
     ZB_ZCL_ATTR_TYPE_CHAR_STRING,                                                 \
-    ZB_ZCL_ATTR_ACCESS_READ_ONLY | ZB_ZCL_ATTR_ACCESS_REPORTING,                  \
+    ZB_ZCL_ATTR_ACCESS_READ_ONLY,                                                 \
     (void*) data_ptr                                                              \
 }
 
+#define ZB_SET_ATTR_DESCR_WITH_ZB_ZCL_ATTR_ANALOG_OUTPUT_APPLICATION_TYPE_ID(data_ptr)  \
+{                                                                                 \
+    ZB_ZCL_ATTR_ANALOG_OUTPUT_APPLICATION_TYPE_ID,                                \
+    ZB_ZCL_ATTR_TYPE_U32,                                                         \
+    ZB_ZCL_ATTR_ACCESS_READ_ONLY,                                                 \
+    (void*) data_ptr                                                              \
+}
 
 /** @brief Default value for Analog Output cluster revision global attribute */
 #define ZB_ZCL_ANALOG_OUTPUT_CLUSTER_REVISION_DEFAULT ((zb_uint16_t)0x0001u)
@@ -154,16 +163,18 @@ enum zb_zcl_analog_output_attr_e
  * @param resolution   Pointer to the variable to store the Resolution attribute.
  * @param units        Pointer to the variable to store the Engineering Units attribute.
  * @param description  Pointer to the variable to store the Description attribute.
+ * @param app_type     Pointer to the variable to store the Application Type attribute.
  */
 #define ZB_ZCL_DECLARE_ANALOG_OUTPUT_ATTRIB_LIST_EX(attr_list,               \
-    value, min_value, max_value, resolution, units, description)                           \
-  ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(attr_list, ZB_ZCL_ANALOG_OUTPUT) \
-  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID, (value))                  \
-  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_MIN_PRESENT_VALUE_ID, (min_value))          \
-  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_MAX_PRESENT_VALUE_ID, (max_value))          \
-  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_RESOLUTION_ID, (resolution))          \
-  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_ENGINEERING_UNITS_ID, (units))          \
-  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_DESCRIPTION_ID, (description))          \
+    value, min_value, max_value, resolution, units, description, app_type)                \
+  ZB_ZCL_START_DECLARE_ATTRIB_LIST_CLUSTER_REVISION(attr_list, ZB_ZCL_ANALOG_OUTPUT)      \
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID, (value))               \
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_MIN_PRESENT_VALUE_ID, (min_value))       \
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_MAX_PRESENT_VALUE_ID, (max_value))       \
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_RESOLUTION_ID, (resolution))             \
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_ENGINEERING_UNITS_ID, (units))           \
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_DESCRIPTION_ID, (description))           \
+  ZB_ZCL_SET_ATTR_DESC(ZB_ZCL_ATTR_ANALOG_OUTPUT_APPLICATION_TYPE_ID, (app_type))         \
   ZB_ZCL_FINISH_DECLARE_ATTRIB_LIST
 
 
@@ -172,8 +183,10 @@ void zb_zcl_analog_output_init_server(void);
 /**@brief Function initialising the client side of Analog Output Cluster. */
 void zb_zcl_analog_output_init_client(void);
 
+#define ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT_SERVER_ROLE_INIT zb_zcl_analog_output_init_server
+#define ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT_CLIENT_ROLE_INIT zb_zcl_analog_output_init_client
 
-#define ZB_ZCL_CONC_CLUSTER_DESC(substance, attr_desc_list, cluster_role_mask)        \
+#define ZB_ZCL_ANALOG_OUTPUT_CLUSTER_DESC(substance, attr_desc_list, cluster_role_mask)        \
 {                                                                                     \
   (ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT),                                   \
   (ZB_ZCL_ARRAY_SIZE(attr_desc_list, zb_zcl_attr_t)),                                 \
