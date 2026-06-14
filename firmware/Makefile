@@ -6,6 +6,10 @@ PASS_LINKER_INPUT_VIA_FILE := 0
 SDK_ROOT := ${HOME}/nrf
 PROJ_DIR := .
 
+SERIAL_PORT := /dev/ttyACM0
+
+NRFUTIL := /opt/nrf-command-line-tools/bin/nrfutil-linux
+
 $(OUTPUT_DIRECTORY)/nrf52840_xxaa.out: \
   LINKER_SCRIPT  := gcc_nrf52.ld
 
@@ -61,6 +65,8 @@ SRC_FILES += \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_ota_upgrade_common.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_ota_upgrade_minimal.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_ota_upgrade_srv_commands.c \
+  $(SDK_ROOT)/components/zigbee/ota/zb_zcl_ota_upgrade_addons.c \
+  $(SDK_ROOT)/components/zigbee/ota/zigbee_dfu_transport.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_poll_control_client.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_poll_control_commands.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_power_config_commands.c \
@@ -132,8 +138,10 @@ SRC_FILES += \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uarte.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_wdt.c \
   $(PROJ_DIR)/main.c \
+  $(PROJ_DIR)/app_dfu_finalize.c \
   $(PROJ_DIR)/sensor.c \
   $(PROJ_DIR)/battvolt.c \
+  $(PROJ_DIR)/dfu_crypto_no_sign.c \
   $(PROJ_DIR)/myzcl/zb_zcl_concentration.c \
   $(PROJ_DIR)/myzcl/zb_zcl_analog_output.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
@@ -145,6 +153,27 @@ SRC_FILES += \
   $(SDK_ROOT)/external/zboss/osif/zb_nrf52_transceiver.c \
   $(SDK_ROOT)/components/zigbee/common/zigbee_logger_eprxzcl.c \
   $(SDK_ROOT)/components/zigbee/common/zigbee_helpers.c \
+\
+  $(SDK_ROOT)/components/zigbee/ota/zb_zcl_ota_upgrade_addons.c \
+  $(SDK_ROOT)/components/zigbee/ota/zigbee_dfu_transport.c \
+  $(SDK_ROOT)/components/iot/background_dfu/background_dfu_block.c \
+  $(SDK_ROOT)/components/iot/background_dfu/background_dfu_operation.c \
+  $(SDK_ROOT)/components/iot/background_dfu/background_dfu_state.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/dfu-cc.pb.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_flash.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_handling_error.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_mbr.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_req_handler.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_settings.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_transport.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_utils.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_validation.c \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_ver_validation.c \
+  $(SDK_ROOT)/components/libraries/sha256/sha256.c \
+  $(SDK_ROOT)/components/libraries/crc32/crc32.c \
+  $(SDK_ROOT)/external/nano-pb/pb_common.c \
+  $(SDK_ROOT)/external/nano-pb/pb_decode.c \
 
 #  $(SDK_ROOT)/components/libraries/button/app_button.c \
 #  $(SDK_ROOT)/components/boards/boards.c \
@@ -197,6 +226,25 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/timer \
   $(SDK_ROOT)/external/nRF-IEEE-802.15.4-radio-driver/src/fem \
   $(SDK_ROOT)/components/libraries/util \
+\
+  $(SDK_ROOT)/components/iot/background_dfu \
+  $(SDK_ROOT)/components/iot/background_dfu/transport \
+  $(SDK_ROOT)/components/libraries/bootloader/dfu \
+  $(SDK_ROOT)/components/softdevice/mbr/headers \
+  $(SDK_ROOT)/components/zigbee/ota \
+  $(SDK_ROOT)/components/libraries/sha256 \
+  $(SDK_ROOT)/external/nano-pb \
+  $(SDK_ROOT)/components/libraries/bootloader \
+  $(SDK_ROOT)/components/libraries/crc32 \
+  $(SDK_ROOT)/components/libraries/crypto\
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310_bl \
+  $(SDK_ROOT)/components/libraries/crypto/backend/cc310 \
+  $(SDK_ROOT)/components/libraries/crypto/backend/mbedtls \
+  $(SDK_ROOT)/components/libraries/crypto/backend/oberon \
+  $(SDK_ROOT)/components/libraries/crypto/backend/micro_ecc \
+  $(SDK_ROOT)/components/libraries/crypto/backend/optiga \
+  $(SDK_ROOT)/components/libraries/crypto/backend/nrf_sw \
+  $(SDK_ROOT)/components/libraries/crypto/backend/nrf_hw \
 
 #  $(SDK_ROOT)/components/libraries/button \
 
@@ -204,6 +252,8 @@ INC_FOLDERS += \
 LIB_FILES += \
   $(SDK_ROOT)/external/zboss/lib/gcc/libzboss.ed.a \
   $(SDK_ROOT)/external/zboss/lib/gcc/nrf52840/nrf_radio_driver.a \
+  $(SDK_ROOT)/external/zboss/lib/gcc/libgppb.a \
+
 
 # Optimization flags
 OPT = -Os -ggdb3
@@ -227,6 +277,13 @@ CFLAGS += -DZB_NRF_INTERNAL
 CFLAGS += -DZB_NVRAM_FLASH_AUTO_ADDRESS
 CFLAGS += -DZB_ZCL_SCENES_OPTIONAL_COMMANDS_DISABLED
 CFLAGS += -DZB_ZCL_USE_ZCL7_AS_DEFAULT_REVISION
+CFLAGS += -DMBR_PRESENT
+CFLAGS += -DNRF_DFU_SETTINGS_VERSION=2
+CFLAGS += -DNRF_DFU_BANK1_START_ADDR=0x00075000
+# The Nordic DFU code is linked into the application, so CODE_START points at
+# the app, not a bootloader. Use a synthetic upper bound that makes
+# DFU_REGION_END() stop before the app-private settings pages at 0xF1000.
+CFLAGS += -DBOOTLOADER_START_ADDR=0x000F4000
 CFLAGS += -mcpu=cortex-m4
 CFLAGS += -mthumb -mabi=aapcs
 CFLAGS += -Wall -Werror
@@ -263,10 +320,15 @@ LDFLAGS += -Wl,--gc-sections
 # use newlib in nano version
 LDFLAGS += --specs=nano.specs
 
-nrf52840_xxaa: CFLAGS += -D__HEAP_SIZE=8192
-nrf52840_xxaa: CFLAGS += -D__STACK_SIZE=8192
-nrf52840_xxaa: ASMFLAGS += -D__HEAP_SIZE=8192
-nrf52840_xxaa: ASMFLAGS += -D__STACK_SIZE=8192
+nrf52840_xxaa: CFLAGS += -D__HEAP_SIZE=0
+nrf52840_xxaa: CFLAGS += -D__STACK_SIZE=4096
+nrf52840_xxaa: ASMFLAGS += -D__HEAP_SIZE=0
+nrf52840_xxaa: ASMFLAGS += -D__STACK_SIZE=4096
+
+nrf52840_xxaa_dfu: CFLAGS += -D__HEAP_SIZE=0
+nrf52840_xxaa_dfu: CFLAGS += -D__STACK_SIZE=4096
+nrf52840_xxaa_dfu: ASMFLAGS += -D__HEAP_SIZE=0
+nrf52840_xxaa_dfu: ASMFLAGS += -D__STACK_SIZE=4096
 
 # Add standard libraries at the very end of the linker input, after all objects
 # that may need symbols provided by these libraries.
@@ -310,10 +372,33 @@ sdk_config:
 	java -jar $(CMSIS_CONFIG_TOOL) $(SDK_CONFIG_FILE)
 
 
+$(OUTPUT_DIRECTORY)/settings.hex: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex
+	@echo Generating DFU settings for SWD provisioning
+	$(NRFUTIL) settings generate --family NRF52840 --application $< --application-version 101 --bootloader-version 1 --bl-settings-version 2 --start-address 0xF2000 --app-boot-validation VALIDATE_GENERATED_CRC $@
+
+$(OUTPUT_DIRECTORY)/dfu_client.hex: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex $(OUTPUT_DIRECTORY)/settings.hex
+	@echo Merging application with DFU settings for SWD provisioning
+	mergehex -m $^ -o $@
+
+dfu-package-settings: $(OUTPUT_DIRECTORY)/settings.hex dfu-package
+	@echo Settings image for SWD: $(OUTPUT_DIRECTORY)/settings.hex
+	@echo Serial DFU package remains application-only: $(OUTPUT_DIRECTORY)/dfu-package.zip
+
+
 dfu-package: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex
 	@echo Packaging $<
-	adafruit-nrfutil dfu genpkg --sd-req 0xFFFE --dev-type 0x0052 --application $<  _build/dfu-package.zip
+#	adafruit-nrfutil dfu genpkg --sd-req 0x0 --dev-type 0x0052 --application $<  $(OUTPUT_DIRECTORY)/dfu-package.zip
+	adafruit-nrfutil dfu genpkg --sd-req 0xFFFE --dev-type 0x0052 --application $<  $(OUTPUT_DIRECTORY)/dfu-package.zip
 
 bootload: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex dfu-package
 	@echo Flashing: $<
-	adafruit-nrfutil --verbose dfu serial --package _build/dfu-package.zip -p $(SERIAL_PORT) -b 115200 --singlebank --touch 1200
+	adafruit-nrfutil --verbose dfu serial --package $(OUTPUT_DIRECTORY)/dfu-package.zip -p $(SERIAL_PORT) -b 115200 --singlebank --touch 1200
+
+flash-settings: $(OUTPUT_DIRECTORY)/settings.hex
+	@echo Flashing DFU settings pages only: $<
+	nrfjprog -f nrf52 --verify --program $< --sectorerase
+	nrfjprog -f nrf52 --reset
+
+bootload-settings: bootload flash-settings
+
+flash-s: flash-settings

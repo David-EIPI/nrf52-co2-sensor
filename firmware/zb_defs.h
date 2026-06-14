@@ -7,8 +7,8 @@
 /* Zigbee definitions and code.
 */
 
-#define IEEE_CHANNEL_MASK (1<<26)
-//   ZB_TRANSCEIVER_ALL_CHANNELS_MASK
+//#define IEEE_CHANNEL_MASK (1<<26)
+#define IEEE_CHANNEL_MASK ZB_TRANSCEIVER_ALL_CHANNELS_MASK
 
 #if !defined ZB_ED_ROLE
 #error Define ZB_ED_ROLE to compile air sensor (End Device) source code.
@@ -16,17 +16,30 @@
 
 #define FIRST_ENDPOINT      1
 #define SECOND_ENDPOINT     2
+#define OTA_ENDPOINT        3
 
 /* Basic cluster attributes initial values. */
 #define SENSOR_INIT_BASIC_APP_VERSION        1                                    /**< Version of the application software (1 byte). */
 #define SENSOR_INIT_BASIC_STACK_VERSION     10                                    /**< Version of the implementation of the Zigbee stack (1 byte). */
-#define SENSOR_INIT_BASIC_HW_VERSION         1                                    /**< Version of the hardware of the device (1 byte). */
+#define SENSOR_INIT_BASIC_HW_VERSION        100                                    /**< Version of the hardware of the device (1 byte). */
 #define SENSOR_INIT_BASIC_MANUF_NAME        "\x02" "DS"                           /**< Manufacturer name (32 bytes). */
 #define SENSOR_INIT_BASIC_MODEL_ID          "\x0a" "CO2Sensor1"                   /**< Model number assigned by manufacturer (32-bytes long string). */
 #define SENSOR_INIT_BASIC_DATE_CODE         "\x08" "20260323"                     /**< First 8 bytes specify the date of manufacturer of the device in ISO 8601 format (YYYYMMDD). The rest (8 bytes) are manufacturer specific. */
 #define SENSOR_INIT_BASIC_POWER_SOURCE      ZB_ZCL_BASIC_POWER_SOURCE_BATTERY     /**< Type of power sources available for the device. For possible values see section 3.2.2.2.8 of ZCL specification. */
 #define SENSOR_INIT_BASIC_LOCATION_DESC     "\x0a" "Study room"                   /**< Describes the physical location of the device (16 bytes). May be modified during commisioning process. */
 #define SENSOR_INIT_BASIC_PH_ENV            ZB_ZCL_BASIC_ENV_UNSPECIFIED          /**< Describes the type of physical environment. For possible values see section 3.2.2.2.10 of ZCL specification. */
+
+
+#define OTA_UPGRADE_MANUFACTURER            0xD3B1                                  /* The attribute indicates the file version of the downloaded image on the device*/
+#define OTA_UPGRADE_IMAGE_TYPE              0x1013                                  /* The attribute indicates the value for the manufacturer of the device */
+#define OTA_UPGRADE_RUNNING_FILE_VERSION    108                                     /* The attribute indicates the file version of the running firmware image on the device */
+#define OTA_UPGRADE_DOWNLOADED_FILE_VERSION 108                                     /* The attribute indicates the file version of the downloaded firmware image on the device */
+#define OTA_UPGRADE_DATA_SIZE               BACKGROUND_DFU_DEFAULT_BLOCK_SIZE       /* The recommended OTA image block size */
+
+/*! @brief Default Frequency request server about new upgrade file (minutes) */
+#define OTA_UPGRADE_QUERY_IMAGE_INTERVAL  (5)
+
+
 
 static zb_uint8_t         m_attr_zcl_version   = ZB_ZCL_VERSION;
 static zb_uint8_t         m_attr_power_source  = SENSOR_INIT_BASIC_POWER_SOURCE;
@@ -167,12 +180,77 @@ ZB_ZCL_DECLARE_ANALOG_OUTPUT_ATTRIB_LIST_EX(calib_conc_attr_list,
     &m_calib_conc_app_type);
 
 
+static struct {
+    zb_uint8_t voltage;         /* pointer to variable to store BatteryVoltage attribute */
+    zb_uint8_t size;            /* pointer to variable to store BatterySize attribute */
+    zb_uint8_t quantity;        /* pointer to variable to store BatteryQuantity attribute */
+    zb_uint8_t rated_voltage;   /* pointer to variable to store BatteryRatedVoltage attribute */
+    zb_uint8_t alarm_mask;      /* pointer to variable to store BatteryAlarmMask attribute */
+    zb_uint8_t voltage_min_threshold; /* pointer to variable to store BatteryVoltageMinThreshold attribute */
+
+    zb_uint8_t remaining;        /* pointer to variable to store BatteryPercentageRemaining attribute */
+    zb_uint8_t threshold1;       /* pointer to variable to store BatteryVoltageThreshold1 attribute */
+    zb_uint8_t threshold2;       /* pointer to variable to store BatteryVoltageThreshold2 attribute */
+    zb_uint8_t threshold3;       /* pointer to variable to store BatteryVoltageThreshold3 attribute */
+    zb_uint8_t min_threshold;    /* pointer to variable to store BatteryPercentageMinThreshold attribute */
+    zb_uint8_t percent_threshold1; /* pointer to variable to store BatteryPercentageThreshold1 attribute */
+    zb_uint8_t percent_threshold2; /* pointer to variable to store BatteryPercentageThreshold2 attribute */
+    zb_uint8_t percent_threshold3; /* pointer to variable to store BatteryPercentageThreshold3 attribute */
+    zb_uint8_t alarm_state;      /* pointer to variable to store BatteryAlarmState attribute */
+} power_config = {
+    .voltage = 0,
+    .size = ZB_ZCL_POWER_CONFIG_BATTERY_SIZE_OTHER,
+    .quantity = 1,
+    .rated_voltage = 42,
+    .alarm_mask = 0,
+    .voltage_min_threshold = 33,
+    .remaining = 200,
+    .threshold1 = 34,
+    .threshold2 = 35,
+    .threshold3 = 36,
+    .min_threshold = 5,
+    .percent_threshold1 = 10,
+    .percent_threshold2 = 20,
+    .percent_threshold3 = 30,
+    .alarm_state = 0,
+};
+
+
+/* This is needed because the macro definition uses bat_num, but does not define it */
+#define bat_num
+
+ZB_ZCL_DECLARE_POWER_CONFIG_BATTERY_ATTRIB_LIST_EXT(power_config_attr_list,
+    &power_config.voltage,
+    &power_config.size,
+    &power_config.quantity,
+    &power_config.rated_voltage,
+    &power_config.alarm_mask,
+    &power_config.voltage_min_threshold,
+    &power_config.remaining,
+    &power_config.threshold1,
+    &power_config.threshold2,
+    &power_config.threshold3,
+    &power_config.min_threshold,
+    &power_config.percent_threshold1,
+    &power_config.percent_threshold2,
+    &power_config.percent_threshold3,
+    &power_config.alarm_state
+);
+
+
 zb_zcl_cluster_desc_t sensor_cluster_list[] =
 {
   ZB_ZCL_CLUSTER_DESC(
     ZB_ZCL_CLUSTER_ID_BASIC,
     ZB_ZCL_ARRAY_SIZE(basic_server_attr_list, zb_zcl_attr_t),
     (basic_server_attr_list),
+    ZB_ZCL_CLUSTER_SERVER_ROLE,
+    ZB_ZCL_MANUF_CODE_INVALID
+  ),
+  ZB_ZCL_CLUSTER_DESC(
+    ZB_ZCL_CLUSTER_ID_POWER_CONFIG,
+    ZB_ZCL_ARRAY_SIZE(power_config_attr_list, zb_zcl_attr_t),
+    (power_config_attr_list),
     ZB_ZCL_CLUSTER_SERVER_ROLE,
     ZB_ZCL_MANUF_CODE_INVALID
   ),
@@ -225,7 +303,7 @@ zb_zcl_cluster_desc_t config_cluster_list[] =
 
 /* Cluster counts have to be plain numbers, they will be stringized later in the _DESC macros. */
 
-#define SENSOR_CLUSTER_LIST_IN_NUM    6
+#define SENSOR_CLUSTER_LIST_IN_NUM    7
 #define SENSOR_CLUSTER_LIST_OUT_NUM   0
 
 #define CONFIG_CLUSTER_LIST_IN_NUM    1
@@ -234,7 +312,7 @@ zb_zcl_cluster_desc_t config_cluster_list[] =
 /* Reporting clusters list. Currently there are 6 reporting clusters.
  Only one reporting context needs to be allocated between all endpoints.
 */
-#define ZB_SENSOR_REPORT_ATTR_COUNT   6
+#define ZB_SENSOR_REPORT_ATTR_COUNT   8
 
 /* Declare cluster list description type. All clusters are of type in (server). */
 /* Cluster list description for the first endpoint */
@@ -251,6 +329,7 @@ zb_zcl_cluster_desc_t config_cluster_list[] =
     0, \
     { \
         ZB_ZCL_CLUSTER_ID_BASIC, \
+        ZB_ZCL_CLUSTER_ID_POWER_CONFIG, \
         ZB_ZCL_CLUSTER_ID_CONC_MEASUREMENT_CO2, \
         ZB_ZCL_CLUSTER_ID_ELECTRICAL_MEASUREMENT, \
         ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT, \
@@ -322,6 +401,161 @@ zb_zcl_cluster_desc_t config_cluster_list[] =
   .c_temperature = ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_UNKNOWN, \
   .p_humidity = ZB_ZCL_ATTR_REL_HUMIDITY_MEASUREMENT_VALUE_UNKNOWN, \
  }
+
+
+/**
+ *  @defgroup ZB_HA_OTA_UPGRADE_CLIENT_DEVICE OTA Upgrade client device.
+ *  @ingroup ZB_ZCL_OTA_UPGRADE_CLIENT
+ *  @addtogroup ZB_HA_OTA_UPGRADE_CLIENT_DEVICE
+ *  HA OTA Upgrade client device.
+ *  @{
+    @details
+    OTA Upgrade client device has 2 clusters: \n
+        - @ref ZB_ZCL_BASIC \n
+        - @ref ZB_ZCL_OTA_UPGRADE_CLIENT
+*/
+
+#define ZB_HA_DEVICE_VER_OTA_UPGRADE_CLIENT        1     /**< Device version */
+#define ZB_HA_OTA_UPGRADE_CLIENT_DEVICE_ID         0xfff0  /**< Device ID */
+
+#define ZB_HA_OTA_UPGRADE_CLIENT_IN_CLUSTER_NUM    1 /**< OTA Upgrade client test input clusters number. */
+#define ZB_HA_OTA_UPGRADE_CLIENT_OUT_CLUSTER_NUM   1 /**< OTA Upgrade client test output clusters number. */
+
+/**
+ *  @brief Declare cluster list for OTA Upgrade client device.
+ *  @param cluster_list_name [IN] - cluster list variable name.
+ *  @param basic_attr_list [IN] - attribute list for Basic cluster.
+ *  @param ota_upgrade_attr_list [OUT] - attribute list for OTA Upgrade client cluster
+ */
+#define ZB_HA_DECLARE_OTA_UPGRADE_CLIENT_CLUSTER_LIST(          \
+  cluster_list_name,                                            \
+  basic_attr_list,                                              \
+  ota_upgrade_attr_list)                                        \
+  zb_zcl_cluster_desc_t cluster_list_name[] =                   \
+  {                                                             \
+    ZB_ZCL_CLUSTER_DESC(                                        \
+      ZB_ZCL_CLUSTER_ID_BASIC,                                  \
+      ZB_ZCL_ARRAY_SIZE(basic_attr_list, zb_zcl_attr_t),        \
+      (basic_attr_list),                                        \
+      ZB_ZCL_CLUSTER_SERVER_ROLE,                               \
+      ZB_ZCL_MANUF_CODE_INVALID                                 \
+      ),                                                        \
+    ZB_ZCL_CLUSTER_DESC(                                        \
+      ZB_ZCL_CLUSTER_ID_OTA_UPGRADE,                            \
+      ZB_ZCL_ARRAY_SIZE(ota_upgrade_attr_list, zb_zcl_attr_t),  \
+      (ota_upgrade_attr_list),                                  \
+      ZB_ZCL_CLUSTER_CLIENT_ROLE,                               \
+      ZB_ZCL_MANUF_CODE_INVALID                                 \
+      )                                                         \
+  }
+
+/**
+ *  @brief Declare simple descriptor for OTA Upgrade client device.
+ *  @param ep_name - endpoint variable name.
+ *  @param ep_id [IN] - endpoint ID.
+ *  @param in_clust_num [IN] - number of supported input clusters.
+ *  @param out_clust_num [IN] - number of supported output clusters.
+ *  @note in_clust_num, out_clust_num should be defined by numeric constants, not variables or any
+ *  definitions, because these values are used to form simple descriptor type name.
+ */
+#define ZB_ZCL_DECLARE_OTA_UPGRADE_CLIENT_SIMPLE_DESC(ep_name, ep_id, in_clust_num, out_clust_num)   \
+  /*ZB_DECLARE_SIMPLE_DESC(in_clust_num, out_clust_num); - struct zb_af_simple_desc_1_1_t declare by default */   \
+  ZB_AF_SIMPLE_DESC_TYPE(in_clust_num, out_clust_num)   \
+      simple_desc_##ep_name =                           \
+  {                                                     \
+    ep_id,                                              \
+    ZB_AF_HA_PROFILE_ID,                                \
+    ZB_HA_OTA_UPGRADE_CLIENT_DEVICE_ID,                 \
+    ZB_HA_DEVICE_VER_OTA_UPGRADE_CLIENT,                \
+    0,                                                  \
+    in_clust_num,                                       \
+    out_clust_num,                                      \
+    {                                                   \
+      ZB_ZCL_CLUSTER_ID_BASIC,                          \
+      ZB_ZCL_CLUSTER_ID_OTA_UPGRADE                     \
+    }                                                   \
+  }
+
+/**
+ *  @brief Declare endpoint for OTA Upgrade client device.
+ *  @param ep_name [IN] - endpoint variable name.
+ *  @param ep_id [IN] - endpoint ID.
+ *  @param cluster_list [IN] - endpoint cluster list.
+ */
+#define ZB_HA_DECLARE_OTA_UPGRADE_CLIENT_EP(ep_name, ep_id, cluster_list) \
+  ZB_ZCL_DECLARE_OTA_UPGRADE_CLIENT_SIMPLE_DESC(                        \
+    ep_name,                                                            \
+    ep_id,                                                              \
+    ZB_HA_OTA_UPGRADE_CLIENT_IN_CLUSTER_NUM,                            \
+    ZB_HA_OTA_UPGRADE_CLIENT_OUT_CLUSTER_NUM);                          \
+  ZB_AF_DECLARE_ENDPOINT_DESC(                                          \
+    ep_name,                                                            \
+    ep_id,                                                              \
+    ZB_AF_HA_PROFILE_ID,                                                \
+    0,                                                                  \
+    NULL,                                                               \
+    ZB_ZCL_ARRAY_SIZE(                                                  \
+      cluster_list,                                                     \
+      zb_zcl_cluster_desc_t),                                           \
+    cluster_list,                                                       \
+    (zb_af_simple_desc_1_1_t*)&simple_desc_##ep_name,                   \
+    0, NULL, /* No reporting ctx */                                     \
+    0, NULL)
+
+typedef struct
+{
+    zb_ieee_addr_t upgrade_server;
+    zb_uint32_t    file_offset;
+    zb_uint32_t    file_version;
+    zb_uint16_t    stack_version;
+    zb_uint32_t    downloaded_file_ver;
+    zb_uint32_t    downloaded_stack_ver;
+    zb_uint8_t     image_status;
+    zb_uint16_t    manufacturer;
+    zb_uint16_t    image_type;
+    zb_uint16_t    min_block_reque;
+    zb_uint16_t    image_stamp;
+    zb_uint16_t    server_addr;
+    zb_uint8_t     server_ep;
+} ota_client_ota_upgrade_attr_t;
+
+
+static ota_client_ota_upgrade_attr_t ota_attr = {
+    .file_version = OTA_UPGRADE_RUNNING_FILE_VERSION,
+    .stack_version = ZB_ZCL_OTA_UPGRADE_FILE_HEADER_STACK_PRO,
+    .image_status = ZB_ZCL_OTA_UPGRADE_IMAGE_STATUS_DEF_VALUE,
+    .downloaded_file_ver = OTA_UPGRADE_DOWNLOADED_FILE_VERSION,
+    .downloaded_stack_ver = ZB_ZCL_OTA_UPGRADE_DOWNLOADED_STACK_DEF_VALUE,
+    .manufacturer = OTA_UPGRADE_MANUFACTURER,
+    .image_type = OTA_UPGRADE_IMAGE_TYPE,
+};
+
+/* OTA cluster attributes data */
+ZB_ZCL_DECLARE_OTA_UPGRADE_ATTRIB_LIST(ota_upgrade_attr_list,
+                                       ota_attr.upgrade_server,
+                                       &ota_attr.file_offset,
+                                       &ota_attr.file_version,
+                                       &ota_attr.stack_version,
+                                       &ota_attr.downloaded_file_ver,
+                                       &ota_attr.downloaded_stack_ver,
+                                       &ota_attr.image_status,
+                                       &ota_attr.manufacturer,
+                                       &ota_attr.image_type,
+                                       &ota_attr.min_block_reque,
+                                       &ota_attr.image_stamp,
+                                       &ota_attr.server_addr,
+                                       &ota_attr.server_ep,
+                                       (uint16_t)NRF_DFU_HW_VERSION,
+                                       OTA_UPGRADE_DATA_SIZE,
+                                       OTA_UPGRADE_QUERY_IMAGE_INTERVAL);
+
+
+ZB_ZCL_DECLARE_BASIC_ATTRIB_LIST(basic_attr_list,
+                                 &m_attr_zcl_version,
+                                 &m_attr_power_source);
+
+ZB_HA_DECLARE_OTA_UPGRADE_CLIENT_CLUSTER_LIST( ota_upgrade_client_clusters,
+           basic_attr_list, ota_upgrade_attr_list);
 
 
 #endif

@@ -4,19 +4,34 @@
 
 #include "battvolt.h"
 
+//#define USE_VDDH5
+
 static nrfx_saadc_config_t bv_saadc_config = NRFX_SAADC_DEFAULT_CONFIG;
+
+
+
+#ifdef USE_VDDH5
+static const nrf_saadc_input_t battery_channel = SAADC_CH_PSELP_PSELP_VDDHDIV5;
+#else
+static const nrf_saadc_input_t battery_channel = NRF_SAADC_INPUT_AIN7;
+//static const nrf_saadc_input_t battery_channel = NRF_SAADC_INPUT_AIN0;
+#endif
 
 static nrf_saadc_channel_config_t bv_channel_config =
 {
     .resistor_p = NRF_SAADC_RESISTOR_DISABLED,
     .resistor_n = NRF_SAADC_RESISTOR_DISABLED,
-    .gain       = NRF_SAADC_GAIN1_6,
+#ifdef USE_VDDH5
+    .gain       = NRF_SAADC_GAIN1_2,
+#else
+    .gain       = NRF_SAADC_GAIN1_5,
+#endif
     .reference  = NRF_SAADC_REFERENCE_INTERNAL,
 //    .reference  = NRF_SAADC_REFERENCE_VDD4,
     .acq_time   = NRF_SAADC_ACQTIME_40US,
     .mode       = NRF_SAADC_MODE_SINGLE_ENDED,
     .burst      = NRF_SAADC_BURST_DISABLED,
-    .pin_p      = (nrf_saadc_input_t)(SAADC_CH_PSELP_PSELP_VDDHDIV5),
+    .pin_p      = battery_channel,
     .pin_n      = NRF_SAADC_INPUT_DISABLED
 };
 
@@ -44,11 +59,11 @@ nrfx_err_t adc_init(void)
 
 int adc_to_mv(int adc_val)
 {
-//    int mV = (adc_val * 600 * 6 * 5) >> 10;
-//    int mV = (adc_val * 600 * 6 * 5) >> 12;
-    int mV = (adc_val * 600 * 6 * 5) >> 14;
-//    int mV = (adc_val * (3300 / 4) * 6 * 5) >> 12;
-
+#ifdef USE_VDDH5
+    int mV = (adc_val * 600 * 2 * 5) >> 14;
+#else
+    int mV = (adc_val * 4468) >> 14;
+#endif
 //    DIODE_FWD_VOLT_DROP_MILLIVOLTS
     return mV;
 }
@@ -59,7 +74,7 @@ int adc_read(void)
 
     int ret_v = 0;
     int i = 0;
-    while (i < 64 && res == NRFX_SUCCESS) {
+    while (i < 256 && res == NRFX_SUCCESS) {
         i += 1;
         res = nrfx_saadc_sample_convert(bv_channel, &bv_value);
         if (NRFX_SUCCESS != res)
@@ -94,11 +109,9 @@ static nrf_saadc_channel_config_t cal_channel_config =
     .acq_time   = NRF_SAADC_ACQTIME_40US,
     .mode       = NRF_SAADC_MODE_DIFFERENTIAL,
     .burst      = NRF_SAADC_BURST_DISABLED,
-    .pin_p      = (nrf_saadc_input_t)(SAADC_CH_PSELP_PSELP_VDDHDIV5),
-    .pin_n      = (nrf_saadc_input_t)(SAADC_CH_PSELP_PSELP_VDDHDIV5),
+    .pin_p      = battery_channel,
+    .pin_n      = battery_channel,
 };
-
-
 
 int calibration_test(void)
 {
