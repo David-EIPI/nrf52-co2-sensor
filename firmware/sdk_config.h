@@ -466,7 +466,7 @@
 // <i> The init packet is always saved in flash, regardless of this setting.
 
 #ifndef NRF_DFU_SAVE_PROGRESS_IN_FLASH
-#define NRF_DFU_SAVE_PROGRESS_IN_FLASH 0
+#define NRF_DFU_SAVE_PROGRESS_IN_FLASH 1
 #endif
 
 // <q> NRF_DFU_SUPPORTS_EXTERNAL_APP  - [Experimental] Support for external app.

@@ -9,6 +9,7 @@
 #include "nrf_gpio.h"
 #include "nrfx_wdt.h"
 #include "nrf_power.h"
+#include "nrf_drv_clock.h"
 
 #include "app_timer.h"
 #include "app_scheduler.h"
@@ -21,6 +22,7 @@
 #include "nrf_dfu_settings.h"
 
 
+#include "app_dfu_abort.h"
 #include "app_dfu_finalize.h"
 #include "sensor.h"
 #include "battvolt.h"
@@ -57,7 +59,8 @@ static void sleepy_device_setup(void)
     /* If sleepy behaviour is enabled, power off unused RAM to save maximum energy */
     if (ZB_PIBCACHE_RX_ON_WHEN_IDLE() == ZB_FALSE)
     {
-        zigbee_power_down_unused_ram();
+        NRF_LOG_INFO("RAM power-down optimization skipped");
+        NRF_LOG_FLUSH();
     }
 #endif /* ! defined DISABLE_POWER_CONSUMPTION_OPTIMIZATION */
 }
@@ -77,6 +80,7 @@ static bool ota_turbo_poll_active = false;
 #define SLEEP_MONITOR_LOG_INTERVAL 128U
 #define SENSOR_SCHEDULE_RETRY_MS   1000U
 #define OTA_TURBO_POLL_TIMEOUT_MS  120000U
+#define OTA_ABORT_RECOVERY_POLL_MS 600000U
 #define OTA_POLL_INTERVAL_MS       1000U
 #define NORMAL_POLL_INTERVAL_MS    15000U
 #define SIGNAL50_RECOVERY_RETRY_MS 1000U
@@ -84,8 +88,10 @@ static bool ota_turbo_poll_active = false;
 #define SIGNAL50_RECOVERY_INIT_ATTEMPT 3U
 
 APP_TIMER_DEF(m_sensor_schedule_timer);
+APP_TIMER_DEF(m_ota_abort_recovery_timer);
 
 static bool sensor_timer_running = false;
+static volatile bool ota_abort_recovery_stop_pending = false;
 static bool signal50_recovery_active = false;
 static uint8_t signal50_recovery_attempts = 0;
 
@@ -102,6 +108,39 @@ static void sensor_schedule_timer_handler(void * p_context)
 
     sensor_timer_running = false;
     schedule_call_is_pending = true;
+}
+
+static void ota_abort_recovery_timer_handler(void * p_context)
+{
+    UNUSED_PARAMETER(p_context);
+
+    ota_abort_recovery_stop_pending = true;
+}
+
+/* This early clock initialization is needed for early log timestamps.
+Otherwise, ZBOSS takes care of the clock when it starts.
+ */
+static void clock_init(void)
+{
+    ret_code_t err_code = nrf_drv_clock_init();
+    uint32_t wait_loops = 0;
+
+    if ((err_code == NRF_SUCCESS) || (err_code == NRF_ERROR_MODULE_ALREADY_INITIALIZED))
+    {
+        nrf_drv_clock_lfclk_request(NULL);
+
+        while (!nrf_drv_clock_lfclk_is_running() && (wait_loops < 100000UL))
+        {
+            wait_loops++;
+            nrf_delay_us(10);
+        }
+
+        APP_ERROR_CHECK_BOOL(nrf_drv_clock_lfclk_is_running());
+    }
+    else
+    {
+        APP_ERROR_CHECK(err_code);
+    }
 }
 
 static void sensor_schedule_after_ms(uint32_t delay_ms)
@@ -346,6 +385,43 @@ static void ota_turbo_poll_stop(void)
     }
 }
 
+static void ota_abort_recovery_poll_start(void)
+{
+    ret_code_t err_code;
+
+    ota_turbo_poll_start(true);
+
+    err_code = app_timer_stop(m_ota_abort_recovery_timer);
+    if ((err_code != NRF_SUCCESS) && (err_code != NRF_ERROR_INVALID_STATE))
+    {
+        NRF_LOG_WARNING("OTA abort recovery timer stop failed: 0x%x", err_code);
+    }
+
+    ota_abort_recovery_stop_pending = false;
+
+    err_code = app_timer_start(m_ota_abort_recovery_timer,
+                               APP_TIMER_TICKS(OTA_ABORT_RECOVERY_POLL_MS),
+                               NULL);
+    if (err_code == NRF_SUCCESS)
+    {
+        NRF_LOG_INFO("OTA abort recovery: fast poll for %u ms", OTA_ABORT_RECOVERY_POLL_MS);
+    }
+    else
+    {
+        NRF_LOG_WARNING("OTA abort recovery timer start failed: 0x%x", err_code);
+    }
+}
+
+static void ota_abort_recovery_check(void)
+{
+    if (ota_abort_recovery_stop_pending)
+    {
+        ota_abort_recovery_stop_pending = false;
+        NRF_LOG_INFO("OTA abort recovery: restore normal poll");
+        ota_turbo_poll_stop();
+    }
+}
+
 /**@brief Read sensors and update Zigbee attributes.
  *
  */
@@ -434,10 +510,10 @@ static void zcl_device_cb(zb_bufid_t bufid)
 
                 if (i_value >= 0 && i_value < 1000000) { /* Sanity check */
                     if (ep_id == FIRST_ENDPOINT) {
-                        sensor_set_calibration_target(i_value);
+                        sensor_request_calibration(i_value);
                     }
                     if (ep_id == SECOND_ENDPOINT) {
-                        sensor_request_calibration(i_value);
+                        sensor_set_calibration_target(i_value);
                     }
                 }
 
@@ -525,8 +601,8 @@ static void zcl_device_cb(zb_bufid_t bufid)
                     NRF_LOG_INFO("Zigbee DFU Aborted");
                     p_ota_upgrade_value->upgrade_status = ZB_ZCL_OTA_UPGRADE_STATUS_ABORT;
                     led_off();
-                    ota_turbo_poll_stop();
-                    zb_abort_dfu();
+                    ota_abort_recovery_poll_start();
+                    app_zb_abort_dfu_preserve_progress();
                     break;
                 default:
                     NRF_LOG_WARNING("OTA cb: unhandled status=%u", p_ota_upgrade_value->upgrade_status);
@@ -569,16 +645,37 @@ void zboss_signal_handler(zb_bufid_t bufid)
     if (sig != ZB_COMMON_SIGNAL_CAN_SLEEP)
     {
         NRF_LOG_INFO("zboss signal %hu", sig);
+        NRF_LOG_FLUSH();
     }
 
     switch(sig)
     {
-        case 50:
+        case ZB_NLME_STATUS_INDICATION:
+
+            zb_zdo_signal_nlme_status_indication_params_t
+                *nlme_status_ind = ZB_ZDO_SIGNAL_GET_PARAMS(p_sg_p,
+                     zb_zdo_signal_nlme_status_indication_params_t);
+
+            if (nlme_status_ind) {
+                NRF_LOG_WARNING("NLME_STATUS_INDICATION: status=%hhd addr=%hd cmd=%hhd",
+                    nlme_status_ind->nlme_status.status,
+                    nlme_status_ind->nlme_status.network_addr,
+                    nlme_status_ind->nlme_status.unknown_command_id);
+            } else {
+                NRF_LOG_WARNING("NLME_STATUS_INDICATION: no data");
+            }
+            NRF_LOG_FLUSH();
+
+//            if (nlme_status_ind->nlme_status.status ==  ZB_NWK_COMMAND_STATUS_BAD_KEY_SEQUENCE_NUMBER) {
+                                // optional check connection
+                                // optional rejoin if necessary
+//            }
+
             /* Signal 50 is not handled by this SDK's zigbee_default_signal_handler().
              * Newer ZBOSS headers identify this area of the signal range differently,
              * so consume it here without interpreting the payload.
              */
-            NRF_LOG_WARNING("Consumed ZBOSS signal 50, status=%hd", status);
+//            NRF_LOG_WARNING("Consumed ZBOSS signal 50, status=%hd", status);
             if (!nwk_connected && !signal50_recovery_active)
             {
                 zb_ret_t sched_ret;
@@ -631,7 +728,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
             else
             {
                 zb_sleep_now();
-//                sleep_monitor_note_return();
+                sleep_monitor_note_return();
             }
 //            ZB_ERROR_CHECK(zigbee_default_signal_handler(bufid));
             break;
@@ -646,6 +743,7 @@ void zboss_signal_handler(zb_bufid_t bufid)
     {
         zb_buf_free(bufid);
     }
+
 }
 
 /**@brief Function for the Timer initialization.
@@ -664,6 +762,12 @@ static void timers_init(void)
                                 APP_TIMER_MODE_SINGLE_SHOT,
                                 sensor_schedule_timer_handler);
     APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_create(&m_ota_abort_recovery_timer,
+                                APP_TIMER_MODE_SINGLE_SHOT,
+                                ota_abort_recovery_timer_handler);
+    APP_ERROR_CHECK(err_code);
+
 }
 
 /**@brief Function for initializing the nrf log module.
@@ -795,7 +899,6 @@ void log_chip_info(void)
     NRF_LOG_INFO("chip variant = %c%c%c%c", var&0xff, (var>>8)&0xff, (var>>16)&0xff, (var>>24)&0xff);
     uint32_t pack = NRF_FICR->INFO.PACKAGE;
     NRF_LOG_INFO("chip package = 0x%x", pack);
-    NRF_LOG_FLUSH();
 }
 
 void led_blink(int count)
@@ -803,10 +906,10 @@ void led_blink(int count)
     int i = 0;
 
     for (i = 0; i < count; i++) {
+        nrf_delay_ms(250);
         led_on();
         nrf_delay_ms(250);
         led_off();
-        nrf_delay_ms(250);
     }
 
 }
@@ -821,12 +924,13 @@ int main(void)
     nrf_gpio_cfg_output(NRF_GPIO_PIN_MAP(0, 15));
 
     /* Initialize timer, logging system and GPIOs. */
+    clock_init();
     timers_init();
     log_init();
     log_chip_info();
 
     /* Indicate boot progress */
-//    led_blink(1);
+    led_blink(1);
 
     sensor_init (zb_attr_update_from_scd40);
 
@@ -839,17 +943,18 @@ int main(void)
     ZB_SET_TRAF_DUMP_OFF();
 
     /* Indicate boot progress */
-    led_blink(3);
+    led_blink(1);
 
     /* Initialize the Zigbee DFU Transport */
     zb_dfu_init(OTA_ENDPOINT);
 
-    led_blink(5);
+    led_blink(1);
+
     /* Initialize Zigbee stack. */
     ZB_INIT("air_sensor");
 
     /* Indicate successful initialization of Zigbee subsystem */
-    led_blink(2);
+    led_blink(1);
 
     /* Set device address to the value read from FICR registers. */
     zb_osif_get_ieee_eui64(ieee_addr);
@@ -883,6 +988,7 @@ int main(void)
         zboss_main_loop_iteration();
         app_sched_execute();
         check_pending_sensor_schedule_call();
+        ota_abort_recovery_check();
         nrfx_wdt_channel_feed(m_channel_id);
         UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());
     }

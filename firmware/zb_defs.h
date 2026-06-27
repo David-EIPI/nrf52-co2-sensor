@@ -32,8 +32,8 @@
 
 #define OTA_UPGRADE_MANUFACTURER            0xD3B1                                  /* The attribute indicates the file version of the downloaded image on the device*/
 #define OTA_UPGRADE_IMAGE_TYPE              0x1013                                  /* The attribute indicates the value for the manufacturer of the device */
-#define OTA_UPGRADE_RUNNING_FILE_VERSION    108                                     /* The attribute indicates the file version of the running firmware image on the device */
-#define OTA_UPGRADE_DOWNLOADED_FILE_VERSION 108                                     /* The attribute indicates the file version of the downloaded firmware image on the device */
+#define OTA_UPGRADE_RUNNING_FILE_VERSION    111                                     /* The attribute indicates the file version of the running firmware image on the device */
+#define OTA_UPGRADE_DOWNLOADED_FILE_VERSION 111                                     /* The attribute indicates the file version of the downloaded firmware image on the device */
 #define OTA_UPGRADE_DATA_SIZE               BACKGROUND_DFU_DEFAULT_BLOCK_SIZE       /* The recommended OTA image block size */
 
 /*! @brief Default Frequency request server about new upgrade file (minutes) */
@@ -282,8 +282,8 @@ zb_zcl_cluster_desc_t sensor_cluster_list[] =
   ),
   ZB_ZCL_CLUSTER_DESC(
     ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
-    ZB_ZCL_ARRAY_SIZE(calib_conc_attr_list, zb_zcl_attr_t),
-    (calib_conc_attr_list),
+    ZB_ZCL_ARRAY_SIZE(calib_dur_attr_list, zb_zcl_attr_t),
+    (calib_dur_attr_list),
     ZB_ZCL_CLUSTER_SERVER_ROLE,
     ZB_ZCL_MANUF_CODE_INVALID
   ),
@@ -294,8 +294,8 @@ zb_zcl_cluster_desc_t config_cluster_list[] =
 {
   ZB_ZCL_CLUSTER_DESC(
     ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
-    ZB_ZCL_ARRAY_SIZE(calib_dur_attr_list, zb_zcl_attr_t),
-    (calib_dur_attr_list),
+    ZB_ZCL_ARRAY_SIZE(calib_conc_attr_list, zb_zcl_attr_t),
+    (calib_conc_attr_list),
     ZB_ZCL_CLUSTER_SERVER_ROLE,
     ZB_ZCL_MANUF_CODE_INVALID
   ),
@@ -309,7 +309,7 @@ zb_zcl_cluster_desc_t config_cluster_list[] =
 #define CONFIG_CLUSTER_LIST_IN_NUM    1
 #define CONFIG_CLUSTER_LIST_OUT_NUM   0
 
-/* Reporting clusters list. Currently there are 6 reporting clusters.
+/* Reporting clusters list. Currently there are 8 reporting clusters.
  Only one reporting context needs to be allocated between all endpoints.
 */
 #define ZB_SENSOR_REPORT_ATTR_COUNT   8

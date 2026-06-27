@@ -18,7 +18,7 @@
 #define STATUS_INTERVAL (DATA_INTERVAL/2+100)  /* interval between data status checks; ms */
 #define CALIBRATION_INTERVAL ((DATA_INTERVAL/1000)*1000) /* intervals between calibration steps should be multiples of 1000ms for accurate reporting of calibration progress */
 
-#define NUM_DISCARD   0 /* Number of warmup readings, which are discarded  */
+#define NUM_DISCARD   1 /* Number of warmup readings, which are discarded  */
 #define NUM_AVERAGE   1 /* Number of readings to collect for averaging */
 
 #define TEMPERATURE_CORRECTION 0 /* Additional offset of the temperature sensor, x100 C */

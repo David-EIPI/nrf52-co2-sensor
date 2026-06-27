@@ -27,69 +27,31 @@ SRC_FILES += \
   $(SDK_ROOT)/external/zboss/src/commissioning/bdb/bdb_finding_binding.c \
   $(SDK_ROOT)/external/zboss/src/zcl/ha_sas.c \
   $(SDK_ROOT)/external/zboss/src/zb_error/zb_error_to_string.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_alarms_commands.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_attr_value.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_basic_commands.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_binary_input.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_c_daily_schedule.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_c_drlc.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_c_messaging.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_c_metering.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_c_price.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_c_wwah.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_color_control_commands.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_common.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_continuous_value_change_commands.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_control4_networking.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_dehumid_control.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_diagnostics_commands.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_door_lock.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_el_measurement.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_en50523_appliance_events_and_alerts.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_fan_control.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_general_commands.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_groups.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_ias_ace_commands.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_ias_wd_commands.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_ias_zone_commands.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_identify_commands.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_illuminance_measurement.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_level_control_commands.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_main.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_meter_identification.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_nvram.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_occupancy_sensing_commands.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_on_off_commands.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_on_off_switch_config.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_ota_upgrade_commands.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_ota_upgrade_common.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_ota_upgrade_minimal.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_ota_upgrade_srv_commands.c \
   $(SDK_ROOT)/components/zigbee/ota/zb_zcl_ota_upgrade_addons.c \
   $(SDK_ROOT)/components/zigbee/ota/zigbee_dfu_transport.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_poll_control_client.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_poll_control_commands.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_power_config_commands.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_pressure_measurement.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_rel_humidity.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_reporting.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_s_daily_schedule.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_s_drlc.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_s_messaging.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_s_metering.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_s_price.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_s_wwah.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_scenes.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_shade_config_commands.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_temp_measurement.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_thermostat_commands.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_thermostat_ui_config.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_time.c \
-  $(SDK_ROOT)/external/zboss/src/zcl/zcl_window_covering.c \
   $(SDK_ROOT)/external/zboss/src/zcl/zcl_wwah_common.c \
   $(SDK_ROOT)/external/zboss/src/commissioning/bdb/zdo_commissioning_bdb.c \
-  $(SDK_ROOT)/external/zboss/src/commissioning/bdb/zdo_commissioning_bdb_formation.c \
-  $(SDK_ROOT)/external/zboss/src/commissioning/legacy/zdo_commissioning_classic.c \
   $(SDK_ROOT)/components/libraries/util/app_error.c \
   $(SDK_ROOT)/components/libraries/util/app_error_handler_gcc.c \
   $(SDK_ROOT)/components/libraries/scheduler/app_scheduler.c \
@@ -121,27 +83,20 @@ SRC_FILES += \
   $(SDK_ROOT)/components/drivers_nrf/nrf_soc_nosd/nrf_soc.c \
   $(SDK_ROOT)/modules/nrfx/soc/nrfx_atomic.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_clock.c \
-  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_gpiote.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/prs/nrfx_prs.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_rng.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_systick.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uart.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uarte.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_saadc.c \
-  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_twi.c \
-  $(SDK_ROOT)/integration/nrfx/legacy/nrf_drv_uart.c \
-  $(SDK_ROOT)/modules/nrfx/soc/nrfx_atomic.c \
-  $(SDK_ROOT)/modules/nrfx/drivers/src/prs/nrfx_prs.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_twi.c \
-  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_twim.c \
-  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uart.c \
-  $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_uarte.c \
   $(SDK_ROOT)/modules/nrfx/drivers/src/nrfx_wdt.c \
+  $(PROJ_DIR)/dfu_crypto_no_sign.c \
   $(PROJ_DIR)/main.c \
+  $(PROJ_DIR)/app_dfu_abort.c \
   $(PROJ_DIR)/app_dfu_finalize.c \
   $(PROJ_DIR)/sensor.c \
   $(PROJ_DIR)/battvolt.c \
-  $(PROJ_DIR)/dfu_crypto_no_sign.c \
   $(PROJ_DIR)/myzcl/zb_zcl_concentration.c \
   $(PROJ_DIR)/myzcl/zb_zcl_analog_output.c \
   $(SDK_ROOT)/modules/nrfx/mdk/system_nrf52840.c \
@@ -154,8 +109,6 @@ SRC_FILES += \
   $(SDK_ROOT)/components/zigbee/common/zigbee_logger_eprxzcl.c \
   $(SDK_ROOT)/components/zigbee/common/zigbee_helpers.c \
 \
-  $(SDK_ROOT)/components/zigbee/ota/zb_zcl_ota_upgrade_addons.c \
-  $(SDK_ROOT)/components/zigbee/ota/zigbee_dfu_transport.c \
   $(SDK_ROOT)/components/iot/background_dfu/background_dfu_block.c \
   $(SDK_ROOT)/components/iot/background_dfu/background_dfu_operation.c \
   $(SDK_ROOT)/components/iot/background_dfu/background_dfu_state.c \
@@ -174,6 +127,7 @@ SRC_FILES += \
   $(SDK_ROOT)/components/libraries/crc32/crc32.c \
   $(SDK_ROOT)/external/nano-pb/pb_common.c \
   $(SDK_ROOT)/external/nano-pb/pb_decode.c \
+
 
 #  $(SDK_ROOT)/components/libraries/button/app_button.c \
 #  $(SDK_ROOT)/components/boards/boards.c \
@@ -277,13 +231,8 @@ CFLAGS += -DZB_NRF_INTERNAL
 CFLAGS += -DZB_NVRAM_FLASH_AUTO_ADDRESS
 CFLAGS += -DZB_ZCL_SCENES_OPTIONAL_COMMANDS_DISABLED
 CFLAGS += -DZB_ZCL_USE_ZCL7_AS_DEFAULT_REVISION
-CFLAGS += -DMBR_PRESENT
 CFLAGS += -DNRF_DFU_SETTINGS_VERSION=2
 CFLAGS += -DNRF_DFU_BANK1_START_ADDR=0x00075000
-# The Nordic DFU code is linked into the application, so CODE_START points at
-# the app, not a bootloader. Use a synthetic upper bound that makes
-# DFU_REGION_END() stop before the app-private settings pages at 0xF1000.
-CFLAGS += -DBOOTLOADER_START_ADDR=0x000F4000
 CFLAGS += -mcpu=cortex-m4
 CFLAGS += -mthumb -mabi=aapcs
 CFLAGS += -Wall -Werror
@@ -291,7 +240,7 @@ CFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # keep every function in a separate section, this allows linker to discard unused ones
 CFLAGS += -ffunction-sections -fdata-sections -fno-strict-aliasing
 CFLAGS += -fno-builtin -fshort-enums -Wno-packed-bitfield-compat
-CFLAGS += -Wno-array-bounds -Wno-address-of-packed-member -Wno-unused-function -save-temps
+CFLAGS += -Wno-array-bounds -Wno-address-of-packed-member -Wno-unused-function
 
 # C++ flags common to all targets
 CXXFLAGS += $(OPT)
@@ -317,16 +266,28 @@ LDFLAGS += -mcpu=cortex-m4
 LDFLAGS += -mfloat-abi=hard -mfpu=fpv4-sp-d16
 # let linker dump unused sections
 LDFLAGS += -Wl,--gc-sections
+LDFLAGS += -Wl,--wrap=nrf_dfu_settings_progress_reset
+LDFLAGS += -Wl,--wrap=nrf_dfu_settings_write
 # use newlib in nano version
 LDFLAGS += --specs=nano.specs
 
 nrf52840_xxaa: CFLAGS += -D__HEAP_SIZE=0
 nrf52840_xxaa: CFLAGS += -D__STACK_SIZE=4096
+# Direct-boot images have no MBR. Leave MBR_PRESENT undefined so ZBOSS
+# auto-NVRAM uses UICR/full-flash fallback instead of reading app code as an
+# MBR bootloader pointer. The synthetic DFU upper bound stops before the
+# direct-boot app-private settings backup page at 0xF5000.
+nrf52840_xxaa: CFLAGS += -DBOOTLOADER_START_ADDR=0x000F5000
 nrf52840_xxaa: ASMFLAGS += -D__HEAP_SIZE=0
 nrf52840_xxaa: ASMFLAGS += -D__STACK_SIZE=4096
 
 nrf52840_xxaa_dfu: CFLAGS += -D__HEAP_SIZE=0
 nrf52840_xxaa_dfu: CFLAGS += -D__STACK_SIZE=4096
+# Bootloader-based images do run behind an MBR. ZBOSS auto-NVRAM can use the
+# real MBR bootloader address, while Nordic DFU uses a synthetic upper bound
+# before the app-private settings backup page at 0xE6000.
+nrf52840_xxaa_dfu: CFLAGS += -DMBR_PRESENT
+nrf52840_xxaa_dfu: CFLAGS += -DBOOTLOADER_START_ADDR=0x000E6000
 nrf52840_xxaa_dfu: ASMFLAGS += -D__HEAP_SIZE=0
 nrf52840_xxaa_dfu: ASMFLAGS += -D__STACK_SIZE=4096
 
@@ -374,7 +335,7 @@ sdk_config:
 
 $(OUTPUT_DIRECTORY)/settings.hex: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex
 	@echo Generating DFU settings for SWD provisioning
-	$(NRFUTIL) settings generate --family NRF52840 --application $< --application-version 101 --bootloader-version 1 --bl-settings-version 2 --start-address 0xF2000 --app-boot-validation VALIDATE_GENERATED_CRC $@
+	$(NRFUTIL) settings generate --family NRF52840 --application $< --application-version 101 --bootloader-version 1 --bl-settings-version 2 --start-address 0xE7000 --app-boot-validation VALIDATE_GENERATED_CRC $@
 
 $(OUTPUT_DIRECTORY)/dfu_client.hex: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex $(OUTPUT_DIRECTORY)/settings.hex
 	@echo Merging application with DFU settings for SWD provisioning
