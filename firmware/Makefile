@@ -318,15 +318,6 @@ $(foreach target, $(TARGETS), $(call define_target, $(target)))
 
 .PHONY: flash erase
 
-# Flash the program
-flash: default
-	@echo Flashing: $(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex
-	nrfjprog -f nrf52 --verify --program $(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex --sectorerase
-	nrfjprog -f nrf52 --reset
-
-erase:
-	nrfjprog -f nrf52 --eraseall
-
 SDK_CONFIG_FILE := ./sdk_config.h
 CMSIS_CONFIG_TOOL := $(SDK_ROOT)/external_tools/cmsisconfig/CMSIS_Configuration_Wizard.jar
 sdk_config:
@@ -341,25 +332,40 @@ $(OUTPUT_DIRECTORY)/dfu_client.hex: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex $(
 	@echo Merging application with DFU settings for SWD provisioning
 	mergehex -m $^ -o $@
 
+dfu_client: $(OUTPUT_DIRECTORY)/dfu_client.hex $(OUTPUT_DIRECTORY)/settings.hex
+
 dfu-package-settings: $(OUTPUT_DIRECTORY)/settings.hex dfu-package
 	@echo Settings image for SWD: $(OUTPUT_DIRECTORY)/settings.hex
 	@echo Serial DFU package remains application-only: $(OUTPUT_DIRECTORY)/dfu-package.zip
 
-
 dfu-package: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex
 	@echo Packaging $<
-#	adafruit-nrfutil dfu genpkg --sd-req 0x0 --dev-type 0x0052 --application $<  $(OUTPUT_DIRECTORY)/dfu-package.zip
 	adafruit-nrfutil dfu genpkg --sd-req 0xFFFE --dev-type 0x0052 --application $<  $(OUTPUT_DIRECTORY)/dfu-package.zip
 
-bootload: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex dfu-package
-	@echo Flashing: $<
-	adafruit-nrfutil --verbose dfu serial --package $(OUTPUT_DIRECTORY)/dfu-package.zip -p $(SERIAL_PORT) -b 115200 --singlebank --touch 1200
+# Flash the direct boot image
+flash: default
+	@echo Flashing: $(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex
+	nrfjprog -f nrf52 --verify --program $(OUTPUT_DIRECTORY)/nrf52840_xxaa.hex --sectorerase
+	nrfjprog -f nrf52 --reset
 
+# Flash the settings
 flash-settings: $(OUTPUT_DIRECTORY)/settings.hex
 	@echo Flashing DFU settings pages only: $<
 	nrfjprog -f nrf52 --verify --program $< --sectorerase
 	nrfjprog -f nrf52 --reset
 
+# Flash both
+flash-s: flash flash-settings
+
+# Flash DFU image for Adafruit bootloader
+bootload: $(OUTPUT_DIRECTORY)/nrf52840_xxaa_dfu.hex dfu-package
+	@echo Flashing: $<
+	adafruit-nrfutil --verbose dfu serial --package $(OUTPUT_DIRECTORY)/dfu-package.zip -p $(SERIAL_PORT) -b 115200 --singlebank --touch 1200
+
+# Flash DFU image and settings
 bootload-settings: bootload flash-settings
 
-flash-s: flash-settings
+
+erase:
+	nrfjprog -f nrf52 --eraseall
+
