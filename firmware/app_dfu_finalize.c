@@ -8,6 +8,7 @@
 #include "nrf.h"
 #include "nrf_dfu_settings.h"
 #include "nrf_dfu_utils.h"
+#include "nrf_fstorage.h"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrfx_wdt.h"
@@ -140,6 +141,53 @@ bool app_dfu_finalize_check_and_log(void)
     return app_dfu_finalize_is_ready_log(true);
 }
 
+static void app_dfu_finalize_flash_wait(void)
+{
+    while (nrf_fstorage_is_busy(NULL))
+    {
+        if (m_channel_id < 8)
+        {
+            NRF_WDT->RR[m_channel_id] = WDT_RR_RR_Reload;
+        }
+
+        (void)NRF_LOG_PROCESS();
+    }
+}
+
+static bool app_dfu_finalize_settings_update(staged_image_info_t const * p_image)
+{
+    ret_code_t ret;
+
+    NRF_LOG_INFO("DFU finalize: update settings bank0 size=%u crc=0x%08x",
+                 p_image->size,
+                 p_image->crc);
+
+    s_dfu_settings.bank_current      = NRF_DFU_CURRENT_BANK_0;
+    s_dfu_settings.bank_0.bank_code  = NRF_DFU_BANK_VALID_APP;
+    s_dfu_settings.bank_0.image_size = p_image->size;
+    s_dfu_settings.bank_0.image_crc  = p_image->crc;
+    nrf_dfu_bank_invalidate(&s_dfu_settings.bank_1);
+    nrf_dfu_settings_progress_reset();
+
+    if (s_dfu_settings.boot_validation_app.type == VALIDATE_CRC)
+    {
+        memcpy(s_dfu_settings.boot_validation_app.bytes,
+               &p_image->crc,
+               sizeof(p_image->crc));
+    }
+
+    ret = nrf_dfu_settings_write_and_backup(NULL);
+    if (ret != NRF_SUCCESS)
+    {
+        NRF_LOG_ERROR("DFU finalize: settings update failed ret=0x%x", ret);
+        return false;
+    }
+
+    app_dfu_finalize_flash_wait();
+    NRF_LOG_INFO("DFU finalize: settings updated");
+    return true;
+}
+
 __attribute__((section(".data.ramfunc"), noinline, noreturn))
 static void app_dfu_finalize_ram(uint32_t src_addr,
                                  uint32_t image_size,
@@ -269,6 +317,11 @@ void app_dfu_finalize_and_reset(void)
                       image.src_addr,
                       crc,
                       image.crc);
+        return;
+    }
+
+    if (!app_dfu_finalize_settings_update(&image))
+    {
         return;
     }
 

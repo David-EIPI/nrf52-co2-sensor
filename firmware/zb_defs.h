@@ -32,8 +32,8 @@
 
 #define OTA_UPGRADE_MANUFACTURER            0xD3B1                                  /* The attribute indicates the file version of the downloaded image on the device*/
 #define OTA_UPGRADE_IMAGE_TYPE              0x1013                                  /* The attribute indicates the value for the manufacturer of the device */
-#define OTA_UPGRADE_RUNNING_FILE_VERSION    111                                     /* The attribute indicates the file version of the running firmware image on the device */
-#define OTA_UPGRADE_DOWNLOADED_FILE_VERSION 111                                     /* The attribute indicates the file version of the downloaded firmware image on the device */
+#define OTA_UPGRADE_RUNNING_FILE_VERSION    114                                     /* The attribute indicates the file version of the running firmware image on the device */
+#define OTA_UPGRADE_DOWNLOADED_FILE_VERSION 114                                     /* The attribute indicates the file version of the downloaded firmware image on the device */
 #define OTA_UPGRADE_DATA_SIZE               BACKGROUND_DFU_DEFAULT_BLOCK_SIZE       /* The recommended OTA image block size */
 
 /*! @brief Default Frequency request server about new upgrade file (minutes) */
@@ -330,10 +330,10 @@ zb_zcl_cluster_desc_t config_cluster_list[] =
     { \
         ZB_ZCL_CLUSTER_ID_BASIC, \
         ZB_ZCL_CLUSTER_ID_POWER_CONFIG, \
-        ZB_ZCL_CLUSTER_ID_CONC_MEASUREMENT_CO2, \
         ZB_ZCL_CLUSTER_ID_ELECTRICAL_MEASUREMENT, \
         ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT, \
         ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT, \
+        ZB_ZCL_CLUSTER_ID_CONC_MEASUREMENT_CO2, \
         ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT, \
     }, \
   };
@@ -375,7 +375,7 @@ zb_zcl_cluster_desc_t config_cluster_list[] =
       ZB_ZCL_ARRAY_SIZE(sensor_cluster_list, zb_zcl_cluster_desc_t), \
       sensor_cluster_list, \
       (zb_af_simple_desc_1_1_t*)&simple_desc_##ep_name, \
-      ZB_SENSOR_REPORT_ATTR_COUNT-1, sensor_reporting_clusters, 0, NULL)
+      ZB_SENSOR_REPORT_ATTR_COUNT, sensor_reporting_clusters, 0, NULL)
 
 
 #define ZB_ZCL_DECLARE_CONFIG_EP(ep_name, ep_id)        \
@@ -390,7 +390,7 @@ zb_zcl_cluster_desc_t config_cluster_list[] =
       ZB_ZCL_ARRAY_SIZE(config_cluster_list, zb_zcl_cluster_desc_t), \
       config_cluster_list, \
       (zb_af_simple_desc_1_1_t*)&simple_desc_##ep_name, \
-      1, sensor_reporting_clusters+5,            \
+      0, NULL,            \
       0, NULL)
 
 

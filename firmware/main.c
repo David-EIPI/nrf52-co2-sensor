@@ -848,7 +848,7 @@ void zb_attr_update_from_scd40(sensor_output_t *data)
     NRF_LOG_DEBUG("tcal=%ld", data->t_calibration);
     log_float_as_binary(&float_conversion_buf);
 
-    zb_zcl_set_attr_val(SECOND_ENDPOINT,
+    zb_zcl_set_attr_val(FIRST_ENDPOINT,
                                      ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
                                      ZB_ZCL_CLUSTER_SERVER_ROLE,
                                      ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID,
